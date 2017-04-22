@@ -3,9 +3,25 @@
 (defclass user-info-view (clim:view)
   ())
 
+(defun extract-mastodon-account-info (user)
+  (list (mastodon:account/display-name user)
+        (mastodon:account/url user)))
+
+(defun extract-status-net-account-info (user)
+  (list (status-net:author/name user)
+        (status-net:author/uri user)))
+
 (defun display-user-info (frame stream)
   (let ((user (mastodon-frame/displayed-user frame)))
-    (present-to-stream user stream)))
+    (when user
+      (destructuring-bind (display-name url)
+          (etypecase user
+            (mastodon:account (extract-mastodon-account-info user))
+            (status-net:author (extract-status-net-account-info user)))
+        (clim:with-text-size (stream 20)
+          (format stream "~a" display-name))
+        (format stream "~%")
+        (present-to-stream (make-instance 'text-link-string :content url :href url) stream)))))
 
 (defclass activity-list-view (clim:view)
   ())

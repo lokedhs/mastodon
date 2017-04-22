@@ -10,7 +10,8 @@
    #:status/content
    #:*credentials*
    #:account-from-url
-   #:user-local-p))
+   #:user-local-p
+   #:account/url))
 
 (defpackage :mastodon-gui
   (:use :cl)

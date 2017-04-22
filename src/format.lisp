@@ -9,29 +9,56 @@
   (:documentation "Returns the URL for the given user"))
 
 (defclass text-link ()
-  ((content :initarg :content
-            :reader text-link/content)
-   (href    :initarg :href
+  ((href    :initarg :href
             :reader text-link/href)
    (title   :initarg :title
+            :initform nil
             :reader text-link/title)))
 
-(defclass mention-link (text-link user-ref)
-  ())
+(defclass text-link-html (text-link)
+  ((content :initarg :content
+            :reader text-link-html/content)))
 
-(clim:define-presentation-method clim:present (obj (type text-link) stream (view t) &key)
+(defclass text-link-string (text-link)
+  ((content :initarg :content
+            :reader text-link-string/content)))
+
+(defclass mention-link (text-link user-ref)
+  ((content :initarg :content
+            :reader text-link/content)))
+
+(defclass user-link (user-ref)
+  ((account :initarg :account
+            :reader user-link/account)))
+
+(defmethod user-ref/url ((obj user-link))
+  (mastodon:account/url (user-link/account obj)))
+
+(defun render-link (stream content-callback)
+    #+sbcl (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+  (clim:with-drawing-options (stream :ink *link-colour*)
+    (funcall content-callback)))
+
+(clim:define-presentation-method clim:present (obj (type text-link-html) stream (view t) &key)
+  ;; Need this declaration here until this issue is fixed:
+  ;; https://github.com/robert-strandh/McCLIM/issues/156
+  (render-link stream (lambda () (present-node-list (text-link-html/content obj) stream))))
+
+(clim:define-presentation-method clim:present (obj (type text-link-string) stream (view t) &key)
   ;; Need this declaration here until this issue is fixed:
   ;; https://github.com/robert-strandh/McCLIM/issues/156
   #+sbcl (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
-  (clim:with-drawing-options (stream :ink *link-colour*)
-    (present-node-list (text-link/content obj) stream)))
+  (render-link stream (lambda () (format stream "~a" (text-link-string/content obj)))))
+
+(clim:define-presentation-method clim:present (obj (type user-link) stream (view t) &key)
+  (format stream "~a" (mastodon:account/display-name (user-link/account obj))))
 
 (defun resolve-class-from-style (style)
   (let ((styles (split-sequence:split-sequence #\Space style)))
     (if (and (member "mention" styles :test #'equal)
              (member "h-card" styles :test #'equal))
         'mention-link
-        'text-link)))
+        'text-link-html)))
 
 (defun parse-link (node)
   (let ((href (dom:get-attribute node "href")))
@@ -74,8 +101,10 @@
 
 (clim:define-presentation-method clim:present (obj (type mastodon:status) stream (view t) &key)
   (let ((account (mastodon:status/account obj)))
-   (clim:with-text-style (stream (clim:make-text-style nil :bold nil))
-     (format stream "~a" (mastodon:account/display-name account)))
+    (clim:with-text-style (stream (clim:make-text-style nil :bold nil))
+      (present-to-stream (make-instance 'user-link
+                                        :account account)
+                         stream))
     (format stream "~%")
     (present-html-string (mastodon:status/content obj) stream)
     (format stream "~%")))

@@ -90,7 +90,8 @@
    (locked          :json-field "locked")
    (note            :json-field "note")
    (statuses-count  :json-field "statuses_count")
-   (url             :json-field "url")
+   (url             :json-field "url"
+                    :reader account/url)
    (username        :json-field "username"
                     :reader account/username))
   (:metaclass json-entity-class))
