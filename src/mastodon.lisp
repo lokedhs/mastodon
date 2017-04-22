@@ -39,12 +39,12 @@
             (gethash "client_secret" result)))))
 
 (defclass credentials ()
-  ((url   :type string
-          :initarg :url
-          :reader credentials/url)
-   (token :type string
-          :initarg :token
-          :reader credentials/token)))
+  ((url    :type string
+           :initarg :url
+           :reader credentials/url)
+   (token  :type string
+           :initarg :token
+           :reader credentials/token)))
 
 (defvar *credentials* nil)
 
@@ -61,35 +61,127 @@
                                              ("client_secret" . ,client-secret)
                                              ("grant_type" . "password")
                                              ("username" . ,username)
-                                             ("password" . ,password)))))
+                                             ("password" . ,password)
+                                             ("scope" . "read write follow")))))
     (make-instance 'credentials
                    :url prefix
                    :token (gethash "access_token" result))))
 
-(defun authenticated-http-request (url cred &key (method :get) additional-headers)
+(defun authenticated-http-request (url cred &key (method :get) additional-headers parameters)
   (json-request (format nil "~a~a" (credentials/url cred) url)
                 :method method
                 :additional-headers (cons (cons :authorization (format nil "Bearer ~a" (credentials/token cred)))
-                                          additional-headers)))
+                                          additional-headers)
+                :parameters parameters))
 
 (defclass account ()
   ((acct            :json-field "acct")
    (avatar          :json-field "avatar")
    (avatar-static   :json-field "avatar_static")
    (created-at      :json-field "created_at")
-   (display-name    :json-field "display_name")
+   (display-name    :json-field "display_name"
+                    :reader account/display-name)
    (followers-count :json-field "followers_count")
    (following-count :json-field "following_count")
    (header          :json-field "header")
    (header-static   :json-field "header_static")
-   (id              :json-field "id")
+   (id              :json-field "id"
+                    :reader account/id)
    (locked          :json-field "locked")
    (note            :json-field "note")
    (statuses-count  :json-field "statuses_count")
    (url             :json-field "url")
-   (username        :json-field "username"))
+   (username        :json-field "username"
+                    :reader account/username))
   (:metaclass json-entity-class))
+
+(defmethod print-object ((obj account) stream)
+  (print-unreadable-object (obj stream :type t)
+    (format stream "ID ~s USERNAME ~s" (account/id obj) (account/username obj))))
+
+(defun ensure-user-id (user)
+  (etypecase user
+    (account (account/id user))
+    (string user)))
+
+(defclass status ()
+  ((id                     :json-field "id"
+                           :reader status/id)
+   (uri                    :json-field "uri")
+   (url                    :json-field "url")
+   (account                :json-field "account"
+                           :json-type (:map account)
+                           :reader status/account)
+   (in-reply-to-id         :json-field "in_reply_to_id")
+   (in-reply-to-account-id :json-field "in_reply_to_account_id")
+   (reblog                 :json-field "reblog")
+   (content                :json-field "content"
+                           :reader status/content)
+   (created-at             :json-field "created_at")
+   (reblogs-count          :json-field "reblogs_count")
+   (favourites-count       :json-field "favourites_count")
+   (reblogged              :json-field "reblogged")
+   (favourited             :json-field "favourited")
+   (sensistive             :json-field "sensistive"
+                           :json-default-value nil)
+   (spoiler-text           :json-field "spoiler_text")
+   (visibility             :json-field "visibility")
+   (media-attachments      :json-field "media_attachments")
+   (mentions               :json-field "mentions")
+   (tags                   :json-field "tags")
+   (application            :json-field "application"))
+  (:metaclass json-entity-class))
+
+(defmethod print-object ((obj status) stream)
+  (print-unreadable-object (obj stream :type t)
+    (format stream "ID ~s" (status/id obj))))
 
 (defun load-account (user-id &key (cred *credentials*))
   (assert-format "^[0-9]+$" user-id)
   (parse-json-object 'account (authenticated-http-request (format nil "api/v1/accounts/~a" user-id) cred)))
+
+(defun load-current-user (&key (cred *credentials*))
+  (parse-json-object 'account (authenticated-http-request "api/v1/accounts/verify_credentials" cred)))
+
+(defun load-following (user &key (cred *credentials*))
+  (let ((user-id (ensure-user-id user)))
+    (mapcar (lambda (v)
+              (parse-json-object 'account v))
+            (authenticated-http-request (format nil "api/v1/accounts/~a/following" user-id) cred))))
+
+(defun follow-from-url (url &key (cred *credentials*))
+  (authenticated-http-request "api/v1/follows"
+                              cred
+                              :method :post
+                              :parameters `(("uri" . ,(status-net:load-webfinger url)))))
+
+(defun update-follow (user follow-p &key (cred *credentials*))
+  (authenticated-http-request (format nil "api/v1/accounts/~a/~:[unfollow~;follow~]"
+                                      (ensure-user-id user) follow-p)
+                              cred
+                              :method :post))
+
+(defun timeline (category &key local (cred *credentials*))
+  (unless (member category '("home" "public") :test #'equal)
+    (error "Invalid timeline category"))
+  (let ((result (authenticated-http-request (format nil "api/v1/timelines/~a" category) cred
+                                            :parameters (if local '(("local" . "true"))))))
+    (mapcar (lambda (v)
+              (parse-json-object 'status v))
+            result)))
+
+(defun user-local-p (url &key (cred *credentials*))
+  "Given a user URL, return true if the user is local to this instance."
+  (equal (puri:uri-host (puri:uri (credentials/url cred)))
+         (puri:uri-host (puri:uri url))))
+
+(defun account-from-url (url &key (cred *credentials*))
+  (let* ((json (authenticated-http-request "api/v1/search" cred
+                                          :parameters `(("q" . ,url))))
+         (accounts (gethash "accounts" json)))
+    (cond ((null accounts)
+           nil)
+          ((null (cdr accounts))
+           (parse-json-object 'account (car accounts)))
+          (t
+           (error "More than one account found for url: ~s" url)))))

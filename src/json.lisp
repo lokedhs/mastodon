@@ -69,9 +69,10 @@
   (init-reinit reinitialize-instance))
 
 (defun parse-json-value (json type)
-  (if (null type)
-      json
-      (error "Currently unable to parse complex types")))
+  (etypecase type
+    (null json)
+    (list (ecase (first type)
+            (:map (parse-json-object (second type) json))))))
 
 (defun parse-json-object (class json)
   (let* ((class (if (symbolp class)
@@ -90,12 +91,3 @@
                        (json-entity-class/json-default-value slot)
                        (parse-json-value value (json-entity-class/json-type slot))))))
     obj))
-
-(defclass foo ()
-  ((foo :json-field "foo")
-   (bar :json-field "bar"))
-  (:metaclass json-entity-class))
-
-(defun test-foo ()
-  (let* ((j (yason:parse "{\"foo\":\"some text\",\"bar\":10}")))
-    (parse-json-object 'foo j)))
