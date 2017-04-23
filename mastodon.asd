@@ -12,6 +12,7 @@
                :bordeaux-threads
                :yason
                :cl-ppcre
+               :uiop
                :status-net)
   :components ((:module "src"
                 :serial t

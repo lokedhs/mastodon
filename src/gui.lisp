@@ -83,10 +83,20 @@
   (let ((user (load-user-from-url url (current-cred))))
     (setf (mastodon-frame/displayed-user clim:*application-frame*) user)))
 
+(define-mastodon-frame-command (open-url :name "Open URL")
+    ((url 'string))
+  (bordeaux-threads:make-thread (lambda ()
+                                  (uiop/run-program:run-program (list "firefox" url)))))
+
 (clim:define-presentation-to-command-translator select-user
     (user-ref load-user mastodon-frame)
     (obj)
   (list (user-ref/url obj)))
+
+(clim:define-presentation-to-command-translator select-url
+    (text-link open-url mastodon-frame)
+    (obj)
+  (list (text-link/href obj)))
 
 (defun mastodon-gui ()
   (let ((frame (clim:make-application-frame 'mastodon-frame

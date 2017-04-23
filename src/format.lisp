@@ -1,5 +1,7 @@
 (in-package :mastodon-gui)
 
+(declaim (optimize (speed 0) (safety 3) (debug 3)))
+
 (defparameter *link-colour* (clim:make-rgb-color 0.0 0.0 1.0))
 
 (defclass user-ref ()
@@ -25,7 +27,7 @@
 
 (defclass mention-link (text-link user-ref)
   ((content :initarg :content
-            :reader text-link/content)))
+            :reader mention-link/content)))
 
 (defclass user-link (user-ref)
   ((account :initarg :account
@@ -47,8 +49,10 @@
 (clim:define-presentation-method clim:present (obj (type text-link-string) stream (view t) &key)
   ;; Need this declaration here until this issue is fixed:
   ;; https://github.com/robert-strandh/McCLIM/issues/156
-  #+sbcl (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
   (render-link stream (lambda () (format stream "~a" (text-link-string/content obj)))))
+
+(clim:define-presentation-method clim:present (obj (type mention-link) stream (view t) &key)
+  (render-link stream (lambda () (present-node-list (mention-link/content obj) stream))))
 
 (clim:define-presentation-method clim:present (obj (type user-link) stream (view t) &key)
   (format stream "~a" (mastodon:account/display-name (user-link/account obj))))
