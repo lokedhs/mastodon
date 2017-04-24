@@ -11,7 +11,13 @@
    #:*credentials*
    #:account-from-url
    #:user-local-p
-   #:account/url))
+   #:account/url
+   #:load-account
+   #:load-current-user
+   #:load-following
+   #:follow-from-url
+   #:update-follow
+   #:post))
 
 (defpackage :mastodon-gui
   (:use :cl)

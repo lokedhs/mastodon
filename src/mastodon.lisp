@@ -186,3 +186,21 @@
            (parse-json-object 'account (car accounts)))
           (t
            (error "More than one account found for url: ~s" url)))))
+
+(defun post (text &key (cred *credentials*) reply-id sensitive sensitive-text (visibility :public))
+  (check-type text string)
+  (check-type reply-id (or null string))
+  (check-type sensitive-text (or null string))
+  (check-type visibility (member :direct :private :unlisted :public))
+  (let ((result (authenticated-http-request "api/v1/statuses" cred
+                                            :method :post
+                                            :parameters `(("status" . ,text)
+                                                          ("visibility" . ,(ecase visibility
+                                                                             (:direct "direct")
+                                                                             (:private "private")
+                                                                             (:unlisted "unlisted")
+                                                                             (:public "public")))
+                                                          ,@(if reply-id `(("in_reply_to_id" . ,reply-id)))
+                                                          ,@(if sensitive `(("sensitive" . "true")))
+                                                          ,@(if sensitive-text `(("spolier_text" . ,sensitive-text)))))))
+    (parse-json-object 'status result)))

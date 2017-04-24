@@ -96,6 +96,10 @@
   (bordeaux-threads:make-thread (lambda ()
                                   (uiop/run-program:run-program (list "xdg-open" url)))))
 
+(define-mastodon-frame-command (post-new :name "Post New")
+    ((text 'string))
+  (mastodon:post text))
+
 (clim:define-presentation-to-command-translator select-url
     (text-link open-url mastodon-frame)
     (obj)
@@ -106,7 +110,7 @@
     (obj)
   (list (user-ref/url obj)))
 
-(clim:define-presentation-to-command-translator select-user
+(clim:define-presentation-to-command-translator select-mention-link
     (mention-link load-user mastodon-frame)
     (obj)
   (list (user-ref/url obj)))
