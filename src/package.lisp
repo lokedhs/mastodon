@@ -16,6 +16,4 @@
 (defpackage :mastodon-gui
   (:use :cl)
   (:documentation "CLIM interface for mastodon")
-  (:export
-   #:mastodon-gui
-   #:user-local-p))
+  (:export #:mastodon-gui))

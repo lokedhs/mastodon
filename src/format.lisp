@@ -36,6 +36,9 @@
 (defmethod user-ref/url ((obj user-link))
   (mastodon:account/url (user-link/account obj)))
 
+(defmethod user-ref/url ((obj mention-link))
+  (text-link/href obj))
+
 (defun render-link (stream content-callback)
     #+sbcl (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
   (clim:with-drawing-options (stream :ink *link-colour*)
@@ -66,6 +69,7 @@
 
 (defun parse-link (node)
   (let ((href (dom:get-attribute node "href")))
+    (format *debug-io* "href=~s, class=~s, type=~s~%" href (dom:get-attribute node "class") (resolve-class-from-style (dom:get-attribute node "class")))
     (make-instance (resolve-class-from-style (dom:get-attribute node "class"))
                    :content (dom:child-nodes node)
                    :href href

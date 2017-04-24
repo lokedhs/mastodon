@@ -60,8 +60,8 @@
 (defun current-cred (&optional (frame clim:*application-frame*))
   (mastodon-frame/credentials frame))
 
-(defun load-timeline (category)
-  (let ((timeline (mastodon:timeline category :cred (current-cred))))
+(defun load-timeline (category local-p)
+  (let ((timeline (mastodon:timeline category :cred (current-cred) :local local-p)))
     (setf (mastodon-frame/messages clim:*application-frame*) timeline)))
 
 (defun load-user-from-url (url cred)
@@ -72,11 +72,19 @@
 
 (define-mastodon-frame-command (home-timeline :name "Home Timeline")
     ()
-  (load-timeline "home"))
+  (load-timeline "home" nil))
 
 (define-mastodon-frame-command (public-timeline :name "Public Timeline")
     ()
-  (load-timeline "public"))
+  (load-timeline "public" nil))
+
+(define-mastodon-frame-command (home-local :name "Home Local")
+    ()
+  (load-timeline "home" t))
+
+(define-mastodon-frame-command (public-local :name "Public Local")
+    ()
+  (load-timeline "public" t))
 
 (define-mastodon-frame-command (load-user :name "Show User")
     ((url 'string))
@@ -86,17 +94,22 @@
 (define-mastodon-frame-command (open-url :name "Open URL")
     ((url 'string))
   (bordeaux-threads:make-thread (lambda ()
-                                  (uiop/run-program:run-program (list "firefox" url)))))
+                                  (uiop/run-program:run-program (list "xdg-open" url)))))
+
+(clim:define-presentation-to-command-translator select-url
+    (text-link open-url mastodon-frame)
+    (obj)
+  (list (text-link/href obj)))
 
 (clim:define-presentation-to-command-translator select-user
     (user-ref load-user mastodon-frame)
     (obj)
   (list (user-ref/url obj)))
 
-(clim:define-presentation-to-command-translator select-url
-    (text-link open-url mastodon-frame)
+(clim:define-presentation-to-command-translator select-user
+    (mention-link load-user mastodon-frame)
     (obj)
-  (list (text-link/href obj)))
+  (list (user-ref/url obj)))
 
 (defun mastodon-gui ()
   (let ((frame (clim:make-application-frame 'mastodon-frame
