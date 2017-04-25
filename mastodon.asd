@@ -13,6 +13,7 @@
                :yason
                :cl-ppcre
                :uiop
+               :lparallel
                :status-net)
   :components ((:module "src"
                 :serial t
@@ -21,4 +22,5 @@
                              (:file "mastodon")
                              (:file "clim-misc")
                              (:file "format")
+                             (:file "image-cache")
                              (:file "gui")))))

@@ -3,24 +3,63 @@
 (defclass user-info-view (clim:view)
   ())
 
+(defclass displayed-user ()
+  ((user  :initarg :user
+          :reader displayed-user/user)
+   (image :initform nil
+          :accessor displayed-user/image)))
+
+(defun find-avatar (user min-width)
+  "Return the smallest avatar for USER that is equal or larger than MIN-WIDTH"
+  (loop
+    with found = nil
+    with found-width = nil
+    for avatar in (status-net:author/avatar user)
+    for width = (status-net:avatar/width avatar)
+    when (or (not found)
+             (and (>= width min-width)
+                  (< width found-width))
+             (and (< width min-width)
+                  (> width found-width)))
+      do (progn
+           (setq found avatar)
+           (setq found-width width))
+    finally (return (status-net:avatar/url found))))
+
 (defun extract-mastodon-account-info (user)
   (list (mastodon:account/display-name user)
-        (mastodon:account/url user)))
+        (mastodon:account/url user)
+        (mastodon:account/note user)
+        (mastodon:account/avatar user)))
 
 (defun extract-status-net-account-info (user)
   (list (status-net:author/name user)
-        (status-net:author/uri user)))
+        (status-net:author/uri user)
+        (status-net:author/summary user)
+        (find-avatar user 128)))
 
 (defun display-user-info (frame stream)
-  (let ((user (mastodon-frame/displayed-user frame)))
-    (when user
-      (destructuring-bind (display-name url)
+  (alexandria:when-let ((displayed-user (mastodon-frame/displayed-user frame)))
+    (let ((user (displayed-user/user displayed-user)))
+      (destructuring-bind (display-name url note avatar)
           (etypecase user
             (mastodon:account (extract-mastodon-account-info user))
             (status-net:author (extract-status-net-account-info user)))
+        (when avatar
+          (find-image-from-url (mastodon-frame/image-cache frame)
+                               avatar
+                               (lambda (entry immediate-p)
+                                 (declare (ignore immediate-p))
+                                 (setf (displayed-user/image displayed-user) (image-cache-entry/pixmap entry)))))
+        (alexandria:when-let ((image (displayed-user/image displayed-user)))
+          (clim:draw-pattern* stream image 0 0)
+          (format stream "~%"))
         (clim:with-text-size (stream 20)
           (format stream "~a" display-name))
-        (format stream "~%")
+        (when note
+          (format stream "~%~%")
+          (present-html-string note stream))
+        (format stream "~%~%")
         (present-to-stream (make-instance 'text-link-string :content url :href url) stream)))))
 
 (defclass activity-list-view (clim:view)
@@ -42,7 +81,9 @@
                    :accessor mastodon-frame/displayed-user)
    (messages       :type list
                    :initform nil
-                   :accessor mastodon-frame/messages))
+                   :accessor mastodon-frame/messages)
+   (image-cache    :type image-cache
+                   :reader mastodon-frame/image-cache))
   (:panes (activity-list :application
                          :default-view (make-instance 'activity-list-view)
                          :display-function 'display-activity-list)
@@ -56,6 +97,9 @@
                        (7/10 activity-list))
                      bottom-adjuster
                      interaction-pane)))
+
+(defmethod initialize-instance :after ((obj mastodon-frame) &key)
+  (setf (slot-value obj 'image-cache) (make-instance 'image-cache)))
 
 (defun current-cred (&optional (frame clim:*application-frame*))
   (mastodon-frame/credentials frame))
@@ -89,7 +133,7 @@
 (define-mastodon-frame-command (load-user :name "Show User")
     ((url 'string))
   (let ((user (load-user-from-url url (current-cred))))
-    (setf (mastodon-frame/displayed-user clim:*application-frame*) user)))
+    (setf (mastodon-frame/displayed-user clim:*application-frame*) (make-instance 'displayed-user :user user))))
 
 (define-mastodon-frame-command (open-url :name "Open URL")
     ((url 'string))
@@ -116,6 +160,8 @@
   (list (user-ref/url obj)))
 
 (defun mastodon-gui ()
+  (unless lparallel:*kernel*
+    (setf lparallel:*kernel* (lparallel:make-kernel 10)))
   (let ((frame (clim:make-application-frame 'mastodon-frame
                                             :credentials mastodon:*credentials*
                                             :width 700 :height 500

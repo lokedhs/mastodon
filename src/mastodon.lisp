@@ -24,9 +24,14 @@
       (when need-close
         (close stream)))))
 
-(defun request-new-application-id ()
+(defun ensure-url (url)
+  (if (eql (aref url (1- (length url))) #\/)
+      url
+      (concatenate 'string url "/")))
+
+(defun request-new-application-id (url)
   (multiple-value-bind (content code return-headers url-reply stream need-close reason-string)
-      (drakma:http-request "https://mastodon.brussels/api/v1/apps"
+      (drakma:http-request (format nil "~aapi/v1/apps" (ensure-url url))
                            :method :post
                            :parameters '(("redirect_uris" . "urn:ietf:wg:oauth:2.0:oob")
                                          ("client_name" . "status-net-lisp")
@@ -52,9 +57,7 @@
   (unless (and (stringp url)
                (plusp (length url)))
     (error "Incorrect url: ~s" url))
-  (let* ((prefix (if (eql (aref url (1- (length url))) #\/)
-                     url
-                     (concatenate 'string url "/")))
+  (let* ((prefix (ensure-url url))
          (result (json-request (format nil "~aoauth/token" prefix)
                                :method :post
                                :parameters `(("client_id" . ,client-id)
@@ -76,7 +79,9 @@
 
 (defclass account ()
   ((acct            :json-field "acct")
-   (avatar          :json-field "avatar")
+   (avatar          :json-field "avatar"
+                    :initform nil
+                    :reader account/avatar)
    (avatar-static   :json-field "avatar_static")
    (created-at      :json-field "created_at")
    (display-name    :json-field "display_name"
@@ -88,7 +93,8 @@
    (id              :json-field "id"
                     :reader account/id)
    (locked          :json-field "locked")
-   (note            :json-field "note")
+   (note            :json-field "note"
+                    :reader account/note)
    (statuses-count  :json-field "statuses_count")
    (url             :json-field "url"
                     :reader account/url)

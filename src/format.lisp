@@ -60,22 +60,30 @@
 (clim:define-presentation-method clim:present (obj (type user-link) stream (view t) &key)
   (format stream "~a" (mastodon:account/display-name (user-link/account obj))))
 
-(defun resolve-class-from-style (style)
-  (let ((styles (split-sequence:split-sequence #\Space style)))
-    (if (and (member "mention" styles :test #'equal)
-             (member "h-card" styles :test #'equal))
-        'mention-link
-        'text-link-html)))
+(defun resolve-class-from-node (node)
+  (loop
+    with hcard = nil
+    with mention = nil
+    for curr = node then (dom:parent-node curr)
+    until (equal (dom:node-name curr) "html")
+    do (let ((style (split-sequence:split-sequence #\Space (dom:get-attribute curr "class"))))
+         (when (member "h-card" style :test #'equal)
+           (setf hcard t))
+         (when (member "mention" style :test #'equal)
+           (setf mention t))
+         (when (and hcard mention)
+           (return 'mention-link)))
+    finally (return 'text-link-html)))
 
 (defun parse-link (node)
   (let ((href (dom:get-attribute node "href")))
-    (format *debug-io* "href=~s, class=~s, type=~s~%" href (dom:get-attribute node "class") (resolve-class-from-style (dom:get-attribute node "class")))
-    (make-instance (resolve-class-from-style (dom:get-attribute node "class"))
+    #+nil(format *debug-io* "href=~s, class=~s, type=~s~%" href (dom:get-attribute node "class") (resolve-class-from-node node))
+    (make-instance (resolve-class-from-node node)
                    :content (dom:child-nodes node)
                    :href href
                    :title (nil-if-empty (dom:get-attribute node "title")))))
 
-(defun present-element (node stream)
+(defun present-element (node stream first)
   (labels ((present-element-bold ()
              (clim:with-text-style (stream (clim:make-text-style nil :bold nil))
                (present-node-list (dom:child-nodes node) stream)))
@@ -87,19 +95,24 @@
         ("b" (present-element-bold))
         ("i" (present-element-italics))
         ("a" (present-to-stream (parse-link node) stream))
+        ("p" (progn
+               (unless first
+                 (format stream "~%~%"))
+               (present-node-list (dom:child-nodes node) stream)))
         (t
          (present-node-list (dom:child-nodes node) stream))))))
 
-(defun present-node (node stream)
+(defun present-node (node stream first)
   (cond ((dom:text-node-p node)
          (princ (dom:node-value node) stream))
         ((dom:element-p node)
-         (present-element node stream))))
+         (present-element node stream first))))
 
 (defun present-node-list (nodes stream)
   (loop
     for node across nodes
-    do (present-node node stream)))
+    for first = t then nil
+    do (present-node node stream first)))
 
 (defun present-html-string (s stream)
   (let ((doc (closure-html:parse s (cxml-dom:make-dom-builder))))

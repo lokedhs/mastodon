@@ -17,7 +17,11 @@
    #:load-following
    #:follow-from-url
    #:update-follow
-   #:post))
+   #:post
+   #:login
+   #:request-new-application-id
+   #:account/note
+   #:account/avatar))
 
 (defpackage :mastodon-gui
   (:use :cl)
