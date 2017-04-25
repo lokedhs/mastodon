@@ -74,13 +74,25 @@
 (defclass activity-list-view (clim:view)
   ())
 
+(defun present-horizonal-separator (stream)
+  (let ((width (clim:bounding-rectangle-width stream)))
+    (multiple-value-bind (x y)
+        (clim:cursor-position (clim:stream-text-cursor stream))
+      (let ((new-y (+ y 10)))
+        (clim:draw-line stream
+                        (clim:make-point 20 new-y)
+                        (clim:make-point (- width 20) new-y)))
+      #+nil(setf (clim:cursor-position (clim:stream-text-cursor stream))
+            (values x (+ 20 y)))
+      (clim:stream-increment-cursor-position stream 0 20))))
+
 (defun display-activity-list (frame stream)
   (let ((messages (mastodon-frame/messages frame)))
     (loop
       for msg in messages
       for first = t then nil
       unless first
-        do (format stream "~%")
+        do (present-horizonal-separator stream)
       do (present-to-stream msg stream))))
 
 (clim:define-application-frame mastodon-frame ()
