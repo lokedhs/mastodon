@@ -1,5 +1,12 @@
 (in-package :mastodon-gui)
 
+(defun call-in-event-handler (frame fn)
+  (clim:execute-frame-command frame `(funcall ,(lambda () (funcall fn))))
+  nil)
+
+(defmacro with-call-in-event-handler (frame &body body)
+  `(call-in-event-handler ,frame (lambda () ,@body)))
+
 (defclass user-info-view (clim:view)
   ())
 
@@ -49,8 +56,10 @@
           (find-image-from-url (mastodon-frame/image-cache frame)
                                avatar
                                (lambda (entry immediate-p)
-                                 (declare (ignore immediate-p))
-                                 (setf (displayed-user/image displayed-user) (image-cache-entry/pixmap entry)))))
+                                 (setf (displayed-user/image displayed-user) (image-cache-entry/pixmap entry))
+                                 (unless immediate-p
+                                   (with-call-in-event-handler frame
+                                     (clim:redisplay-frame-pane frame (clim:find-pane-named frame 'user-info)))))))
         (alexandria:when-let ((image (displayed-user/image displayed-user)))
           (clim:draw-pattern* stream image 0 0)
           (format stream "~%"))
