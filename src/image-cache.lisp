@@ -27,7 +27,8 @@
 (defun suffix-from-type (type)
   (string-case:string-case (type)
     ("image/png" "png")
-    ("image/jpeg" "jpg")))
+    ("image/jpeg" "jpg")
+    ("image/gif" "gif")))
 
 (defun load-image-in-cache (cache entry)
   (check-type cache image-cache)

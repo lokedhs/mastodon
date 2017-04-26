@@ -62,7 +62,7 @@
           (format stream "~a" display-name))
         (when note
           (format stream "~%~%")
-          (present-html-string note stream))
+          (present-multiline-with-wordwrap stream note))
         (format stream "~%~%")
         (present-to-stream (make-instance 'text-link-string :content url :href url) stream)))))
 
@@ -73,6 +73,7 @@
   (let ((width (clim:bounding-rectangle-width stream)))
     (multiple-value-bind (x y)
         (clim:cursor-position (clim:stream-text-cursor stream))
+      (declare (ignore x))
       (let ((new-y (+ y 10)))
         (clim:draw-line stream
                         (clim:make-point 20 new-y)

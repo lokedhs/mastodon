@@ -10,7 +10,6 @@
   `(call-in-event-handler ,frame (lambda () ,@body)))
 
 (defun present-text-with-wordwrap (stream text)
-  #+sbcl
   (let ((words (sb-unicode:words text)))
     (loop
       with pane-width = (clim:bounding-rectangle-width stream)
@@ -18,11 +17,24 @@
       do (let ((x (clim:cursor-position (clim:stream-text-cursor stream))))
            (when (> (+ x (clim:stream-string-width stream word)) pane-width)
              (format stream "~%"))
-           (format stream word))))
+           (format stream word)))))
 
-  ;; No word wrap on non-sbcl platforms
-  #-sbcl
-  (format stream "~a" text))
+(defun present-multiline-with-wordwrap (stream text)
+  (loop
+    with start = nil
+    for i from 0 below (length text)
+    if (eql (aref text i) #\Newline)
+      do (progn
+           (when (and start (> i start))
+             (present-text-with-wordwrap stream (subseq text start i))
+             (setq start nil))
+           (format stream "nl~%"))
+    else
+      do (progn
+           (when (null start)
+             (setq start i)))
+    finally (when start
+              (present-text-with-wordwrap stream (subseq text start)))))
 
 (defun display-debug-wordwrap (frame stream)
   (declare (ignore frame))
