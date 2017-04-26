@@ -1,11 +1,6 @@
 (in-package :mastodon-gui)
 
-(defun call-in-event-handler (frame fn)
-  (clim:execute-frame-command frame `(funcall ,(lambda () (funcall fn))))
-  nil)
-
-(defmacro with-call-in-event-handler (frame &body body)
-  `(call-in-event-handler ,frame (lambda () ,@body)))
+(declaim (optimize (speed 0) (safety 3) (debug 3)))
 
 (defclass user-info-view (clim:view)
   ())
@@ -62,7 +57,7 @@
                                      (clim:redisplay-frame-pane frame (clim:find-pane-named frame 'user-info)))))))
         (alexandria:when-let ((image (displayed-user/image displayed-user)))
           (clim:draw-pattern* stream image 0 0)
-          (format stream "~%"))
+          (clim:stream-increment-cursor-position stream 0 (+ (clim:pattern-height image) 10)))
         (clim:with-text-size (stream 20)
           (format stream "~a" display-name))
         (when note

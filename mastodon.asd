@@ -22,5 +22,6 @@
                              (:file "mastodon")
                              (:file "clim-misc")
                              (:file "format")
+                             (:file "gui-misc")
                              (:file "image-cache")
                              (:file "gui")))))

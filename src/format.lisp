@@ -104,7 +104,7 @@
 
 (defun present-node (node stream first)
   (cond ((dom:text-node-p node)
-         (princ (dom:node-value node) stream))
+         (present-text-with-wordwrap stream (dom:node-value node)))
         ((dom:element-p node)
          (present-element node stream first))))
 
