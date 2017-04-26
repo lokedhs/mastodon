@@ -11,7 +11,7 @@
 
 (defun present-text-with-wordwrap (stream text)
   #+sbcl
-  (let ((words #+sbcl(sb-unicode:words text)))
+  (let ((words (sb-unicode:words text)))
     (loop
       with pane-width = (clim:bounding-rectangle-width stream)
       for word in words
