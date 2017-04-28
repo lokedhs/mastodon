@@ -17,7 +17,7 @@
       do (let ((x (clim:cursor-position (clim:stream-text-cursor stream))))
            (when (> (+ x (clim:stream-string-width stream word)) pane-width)
              (format stream "~%"))
-           (format stream word)))))
+           (format stream "~a" word)))))
 
 (defun present-multiline-with-wordwrap (stream text)
   (loop
