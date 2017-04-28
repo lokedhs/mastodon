@@ -19,7 +19,7 @@
              (format stream "~%"))
            (format stream "~a" word)))))
 
-(defun present-multiline-with-wordwrap (stream text)
+(defun present-multiline-with-wordwrap (text stream)
   (loop
     with start = nil
     for i from 0 below (length text)

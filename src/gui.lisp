@@ -32,18 +32,20 @@
   (list (mastodon:account/display-name user)
         (mastodon:account/url user)
         (mastodon:account/note user)
+        :html
         (mastodon:account/avatar user)))
 
 (defun extract-status-net-account-info (user)
   (list (status-net:author/name user)
         (status-net:author/uri user)
         (status-net:author/summary user)
+        (if (equal (status-net:author/summary-type user) "html") :html nil)
         (find-avatar user 128)))
 
 (defun display-user-info (frame stream)
   (alexandria:when-let ((displayed-user (mastodon-frame/displayed-user frame)))
     (let ((user (displayed-user/user displayed-user)))
-      (destructuring-bind (display-name url note avatar)
+      (destructuring-bind (display-name url note note-type avatar)
           (etypecase user
             (mastodon:account (extract-mastodon-account-info user))
             (status-net:author (extract-status-net-account-info user)))
@@ -62,7 +64,9 @@
           (format stream "~a" display-name))
         (when note
           (format stream "~%~%")
-          (present-multiline-with-wordwrap stream note))
+          (if (eq note-type :html)
+              (present-html-string note stream)
+              (present-multiline-with-wordwrap note stream)))
         (format stream "~%~%")
         (present-to-stream (make-instance 'text-link-string :content url :href url) stream)))))
 
