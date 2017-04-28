@@ -131,19 +131,15 @@
         (t
          (car (status-net:load-feed url)))))
 
-(define-mastodon-frame-command (home-timeline :name "Home Timeline")
+(define-mastodon-frame-command (home-timeline :name "Home")
     ()
   (load-timeline "home" nil))
 
-(define-mastodon-frame-command (public-timeline :name "Public Timeline")
+(define-mastodon-frame-command (public-timeline :name "Public")
     ()
   (load-timeline "public" nil))
 
-(define-mastodon-frame-command (home-local :name "Home Local")
-    ()
-  (load-timeline "home" t))
-
-(define-mastodon-frame-command (public-local :name "Public Local")
+(define-mastodon-frame-command (public-local :name "Local")
     ()
   (load-timeline "public" t))
 
