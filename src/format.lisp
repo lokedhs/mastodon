@@ -3,6 +3,7 @@
 (declaim (optimize (speed 0) (safety 3) (debug 3)))
 
 (defparameter *link-colour* (clim:make-rgb-color 0.0 0.0 1.0))
+(defparameter *status-heading-colour* (clim:make-rgb-color 0.2 0.4 0.2))
 
 (defclass user-ref ()
   ())
@@ -122,10 +123,14 @@
 
 (clim:define-presentation-method clim:present (obj (type mastodon:status) stream (view t) &key)
   (let ((account (mastodon:status/account obj)))
+    #+sbcl (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
     (clim:with-text-style (stream (clim:make-text-style nil :bold nil))
       (present-to-stream (make-instance 'user-link
                                         :account account)
                          stream))
-    (format stream "~%")
+    (clim:with-drawing-options (stream :ink *status-heading-colour*)
+      (format stream " - ~a - ~a~%"
+              (mastodon:account/acct (mastodon:status/account obj))
+              (format-readable-date (mastodon:status/created-at obj))))
     (present-html-string (mastodon:status/content obj) stream)
     (format stream "~%")))

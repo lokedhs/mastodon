@@ -21,7 +21,9 @@
    #:login
    #:request-new-application-id
    #:account/note
-   #:account/avatar))
+   #:account/avatar
+   #:status/created-at
+   #:account/acct))
 
 (defpackage :mastodon-gui
   (:use :cl)

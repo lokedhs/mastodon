@@ -78,7 +78,8 @@
                 :parameters parameters))
 
 (defclass account ()
-  ((acct            :json-field "acct")
+  ((acct            :json-field "acct"
+                    :reader account/acct)
    (avatar          :json-field "avatar"
                     :initform nil
                     :reader account/avatar)
@@ -124,7 +125,8 @@
    (reblog                 :json-field "reblog")
    (content                :json-field "content"
                            :reader status/content)
-   (created-at             :json-field "created_at")
+   (created-at             :json-field "created_at"
+                           :reader status/created-at)
    (reblogs-count          :json-field "reblogs_count")
    (favourites-count       :json-field "favourites_count")
    (reblogged              :json-field "reblogged")

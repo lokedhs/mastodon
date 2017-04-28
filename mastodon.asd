@@ -14,6 +14,7 @@
                :cl-ppcre
                :uiop
                :lparallel
+               :local-time
                :status-net)
   :components ((:module "src"
                 :serial t
@@ -25,3 +26,4 @@
                              (:file "gui-misc")
                              (:file "image-cache")
                              (:file "gui")))))
+
