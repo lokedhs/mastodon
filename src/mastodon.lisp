@@ -70,8 +70,11 @@
                    :url prefix
                    :token (gethash "access_token" result))))
 
+(defun make-mastodon-url (url cred)
+  (format nil "~a~a" (credentials/url cred) url))
+
 (defun authenticated-http-request (url cred &key (method :get) additional-headers parameters)
-  (json-request (format nil "~a~a" (credentials/url cred) url)
+  (json-request (make-mastodon-url url cred)
                 :method method
                 :additional-headers (cons (cons :authorization (format nil "Bearer ~a" (credentials/token cred)))
                                           additional-headers)
@@ -201,7 +204,8 @@
   (check-type sensitive-text (or null string))
   (check-type visibility (member :direct :private :unlisted :public))
   (let ((result (authenticated-http-request "api/v1/statuses" cred
-                                            :method :post
+  
+                                          :method :post
                                             :parameters `(("status" . ,text)
                                                           ("visibility" . ,(ecase visibility
                                                                              (:direct "direct")
@@ -212,3 +216,24 @@
                                                           ,@(if sensitive `(("sensitive" . "true")))
                                                           ,@(if sensitive-text `(("spolier_text" . ,sensitive-text)))))))
     (parse-json-object 'status result)))
+
+(defun public-stream (&key (cred *credentials*))
+  (multiple-value-bind (content code return-headers url-reply stream-ret need-close reason-string)
+      (drakma:http-request (make-mastodon-url "api/v1/streaming/public" cred)
+                           :want-stream t
+                           :force-binary t
+                           :additional-headers `((:authorization . ,(format nil "Bearer ~a" (credentials/token cred)))))
+    (declare (ignore content return-headers url-reply))
+    (unwind-protect
+         (progn
+           (unless (= code 200)
+             (error "HTTP error when connecting. id: ~a. Reason: ~a" code reason-string))
+           (let ((stream (flexi-streams:make-flexi-stream stream-ret :external-format :utf-8)))
+             (loop
+               for line = (read-line stream)
+               do (print line)
+               unless (or (zerop (length line))
+                          (eql (aref line 0) #\:))
+                 do (print 'proper-line))))
+      (when need-close
+        (close stream-ret)))))

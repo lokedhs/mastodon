@@ -9,7 +9,9 @@
   ((user  :initarg :user
           :reader displayed-user/user)
    (image :initform nil
-          :accessor displayed-user/image)))
+          :accessor displayed-user/image)
+   (timeline :initarg :timeline
+             :accessor displayed-user/timeline)))
 
 (defun find-avatar (user min-width)
   "Return the smallest avatar for USER that is equal or larger than MIN-WIDTH"
@@ -68,12 +70,16 @@
               (present-html-string note stream)
               (present-multiline-with-wordwrap note stream)))
         (format stream "~%~%")
-        (present-to-stream (make-instance 'text-link-string :content url :href url) stream)))))
+        (present-to-stream (make-instance 'text-link-string :content url :href url) stream)
+        ;;
+        (alexandria:when-let ((timeline (displayed-user/timeline displayed-user)))
+          (present-horizontal-separator stream)
+          (present-activity-list timeline stream))))))
 
 (defclass activity-list-view (clim:view)
   ())
 
-(defun present-horizonal-separator (stream)
+(defun present-horizontal-separator (stream)
   (let ((width (clim:bounding-rectangle-width stream)))
     (multiple-value-bind (x y)
         (clim:cursor-position (clim:stream-text-cursor stream))
@@ -86,14 +92,16 @@
             (values x (+ 20 y)))
       (clim:stream-increment-cursor-position stream 0 20))))
 
+(defun present-activity-list (messages stream)
+  (loop
+    for msg in messages
+    for first = t then nil
+    unless first
+      do (present-horizontal-separator stream)
+    do (present-to-stream msg stream)))
+
 (defun display-activity-list (frame stream)
-  (let ((messages (mastodon-frame/messages frame)))
-    (loop
-      for msg in messages
-      for first = t then nil
-      unless first
-        do (present-horizonal-separator stream)
-      do (present-to-stream msg stream))))
+  (present-activity-list (mastodon-frame/messages frame) stream))
 
 (clim:define-application-frame mastodon-frame ()
   ((credentials    :initarg :credentials
@@ -129,12 +137,6 @@
   (let ((timeline (mastodon:timeline category :cred (current-cred) :local local-p)))
     (setf (mastodon-frame/messages clim:*application-frame*) timeline)))
 
-(defun load-user-from-url (url cred)
-  (cond ((mastodon:user-local-p url :cred cred)
-         (mastodon:account-from-url url))
-        (t
-         (car (status-net:load-feed url)))))
-
 (define-mastodon-frame-command (home-timeline :name "Home")
     ()
   (load-timeline "home" nil))
@@ -149,8 +151,15 @@
 
 (define-mastodon-frame-command (load-user :name "Show User")
     ((url 'string))
-  (let ((user (load-user-from-url url (current-cred))))
-    (setf (mastodon-frame/displayed-user clim:*application-frame*) (make-instance 'displayed-user :user user))))
+  (let ((cred (mastodon-frame/credentials clim:*application-frame*)))
+    (setf (mastodon-frame/displayed-user clim:*application-frame*)
+          (cond ((mastodon:user-local-p url :cred cred)
+                 (let ((user (mastodon:account-from-url url)))
+                   (make-instance 'displayed-user :user user)))
+                (t
+                 (destructuring-bind (user feed)
+                     (status-net:load-feed url)
+                   (make-instance 'displayed-user :user user :timeline feed)))))))
 
 (define-mastodon-frame-command (open-url :name "Open URL")
     ((url 'string))
