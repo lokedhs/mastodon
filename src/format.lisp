@@ -5,6 +5,12 @@
 (defparameter *link-colour* (clim:make-rgb-color 0.0 0.0 1.0))
 (defparameter *status-heading-colour* (clim:make-rgb-color 0.2 0.4 0.2))
 
+(defclass remote-status ()
+  ((user :initarg :user
+         :reader remote-status/user)
+   (post :initarg :post
+         :reader remote-status/post)))
+
 (defclass user-ref ()
   ())
 
@@ -34,11 +40,18 @@
   ((account :initarg :account
             :reader user-link/account)))
 
+(defclass user-link-remote (user-ref)
+  ((author :initarg :author
+           :reader user-link-remote/author)))
+
 (defmethod user-ref/url ((obj user-link))
   (mastodon:account/url (user-link/account obj)))
 
 (defmethod user-ref/url ((obj mention-link))
   (text-link/href obj))
+
+(defmethod user-ref/url ((obj user-link-remote))
+  (status-net:author/uri obj))
 
 (defun render-link (stream content-callback)
     #+sbcl (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
@@ -60,6 +73,9 @@
 
 (clim:define-presentation-method clim:present (obj (type user-link) stream (view t) &key)
   (format stream "~a" (mastodon:account/display-name (user-link/account obj))))
+
+(clim:define-presentation-method clim:present (obj (type user-link-remote) stream (view t) &key)
+  (render-link stream (lambda () (format stream "~a" (status-net:author/display-name (user-link-remote/author obj))))))
 
 (defun resolve-class-from-node (node)
   (loop
@@ -121,16 +137,28 @@
       (let ((body (xpath:first-node (xpath:evaluate "/h:html/h:body" doc))))
         (present-node-list (dom:child-nodes body) stream)))))
 
+(defun present-status (stream user-ptr user-id timestamp content)
+  #+sbcl (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+  (clim:with-text-style (stream (clim:make-text-style nil :bold nil))
+    (present-to-stream user-ptr stream))
+  (clim:with-drawing-options (stream :ink *status-heading-colour*)
+    (format stream " - ~a - ~a~%" user-id (format-readable-date timestamp)))
+  (present-html-string content stream)
+  (format stream "~%"))
+
 (clim:define-presentation-method clim:present (obj (type mastodon:status) stream (view t) &key)
   (let ((account (mastodon:status/account obj)))
-    #+sbcl (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
-    (clim:with-text-style (stream (clim:make-text-style nil :bold nil))
-      (present-to-stream (make-instance 'user-link
-                                        :account account)
-                         stream))
-    (clim:with-drawing-options (stream :ink *status-heading-colour*)
-      (format stream " - ~a - ~a~%"
-              (mastodon:account/acct (mastodon:status/account obj))
-              (format-readable-date (mastodon:status/created-at obj))))
-    (present-html-string (mastodon:status/content obj) stream)
-    (format stream "~%")))
+    (present-status stream
+                    (make-instance 'user-link :account account)
+                    (mastodon:account/acct (mastodon:status/account obj))
+                    (mastodon:status/created-at obj)
+                    (mastodon:status/content obj))))
+
+(clim:define-presentation-method clim:present (obj (type remote-status) stream (view t) &key)
+  (let ((user (remote-status/user obj))
+        (msg (remote-status/post obj)))
+    (present-status stream
+                    (make-instance 'user-link-remote :author user)
+                    (status-net:author/name user)
+                    (status-net:post/published msg)
+                    (status-net:post/content-html msg))))

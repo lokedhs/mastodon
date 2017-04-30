@@ -73,6 +73,7 @@
         (present-to-stream (make-instance 'text-link-string :content url :href url) stream)
         ;;
         (alexandria:when-let ((timeline (displayed-user/timeline displayed-user)))
+          (format stream "~%")
           (present-horizontal-separator stream)
           (present-activity-list timeline stream))))))
 
@@ -159,7 +160,12 @@
                 (t
                  (destructuring-bind (user feed)
                      (status-net:load-feed url)
-                   (make-instance 'displayed-user :user user :timeline feed)))))))
+                   (make-instance 'displayed-user :user user
+                                                  :timeline (mapcar (lambda (msg)
+                                                                      (make-instance 'remote-status
+                                                                                     :user user
+                                                                                     :post msg))
+                                                                    feed))))))))
 
 (define-mastodon-frame-command (open-url :name "Open URL")
     ((url 'string))
