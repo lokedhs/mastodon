@@ -22,6 +22,7 @@
                              (:file "json")
                              (:file "mastodon")
                              (:file "clim-misc")
+                             (:file "button")
                              (:file "format")
                              (:file "gui-misc")
                              (:file "image-cache")

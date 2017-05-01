@@ -119,7 +119,8 @@
   ((id                     :json-field "id"
                            :reader status/id)
    (uri                    :json-field "uri")
-   (url                    :json-field "url")
+   (url                    :json-field "url"
+                           :reader status/url)
    (account                :json-field "account"
                            :json-type (:map account)
                            :reader status/account)
@@ -200,19 +201,18 @@
 
 (defun post (text &key (cred *credentials*) reply-id sensitive sensitive-text (visibility :public))
   (check-type text string)
-  (check-type reply-id (or null string))
+  (check-type reply-id (or null integer))
   (check-type sensitive-text (or null string))
   (check-type visibility (member :direct :private :unlisted :public))
   (let ((result (authenticated-http-request "api/v1/statuses" cred
-  
-                                          :method :post
+                                            :method :post
                                             :parameters `(("status" . ,text)
                                                           ("visibility" . ,(ecase visibility
                                                                              (:direct "direct")
                                                                              (:private "private")
                                                                              (:unlisted "unlisted")
                                                                              (:public "public")))
-                                                          ,@(if reply-id `(("in_reply_to_id" . ,reply-id)))
+                                                          ,@(if reply-id `(("in_reply_to_id" . ,(princ-to-string reply-id))))
                                                           ,@(if sensitive `(("sensitive" . "true")))
                                                           ,@(if sensitive-text `(("spolier_text" . ,sensitive-text)))))))
     (parse-json-object 'status result)))
@@ -237,3 +237,21 @@
                  do (print 'proper-line))))
       (when need-close
         (close stream-ret)))))
+
+(defun search-from-site (url query &key resolve)
+  (multiple-value-bind (content code return-headers url-reply stream need-close reason-string)
+      (drakma:http-request (concatenate 'string (ensure-url url) "api/v1/search")
+                           :want-stream t
+                           :parameters `(("q" . ,query)
+                                         ("resolve" . ,(if resolve "false" "true"))))
+    (declare (ignore content return-headers url-reply))
+    (unwind-protect
+         (progn
+           (unless (= code 200)
+             (error "HTTP error when connecting. id: ~a. Reason: ~a" code reason-string))
+           (let ((json (yason:parse (flexi-streams:make-flexi-stream stream :external-format :utf-8))))
+             `((:accounts . ,(mapcar (lambda (v) (parse-json-object 'account v)) (gethash "accounts" json)))
+               (:hashtags . ,(gethash "hashtags" json))
+               (:statuses . ,(mapcar (lambda (v) (parse-json-object 'status v)) (gethash "statuses" json))))))
+      (when need-close
+        (close stream)))))

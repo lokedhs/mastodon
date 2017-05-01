@@ -5,7 +5,29 @@
 (defparameter *link-colour* (clim:make-rgb-color 0.0 0.0 1.0))
 (defparameter *status-heading-colour* (clim:make-rgb-color 0.2 0.4 0.2))
 
-(defclass remote-status ()
+(defclass displayed-status (generic-status)
+  ((status :initarg :status
+           :reader displayed-status/status)))
+
+(defclass message-actions-mixin ()
+  ((msg :initarg :msg)))
+
+(defclass reply-button (button message-actions-mixin)
+  ())
+
+(defmethod button/text ((button reply-button))
+  "Reply")
+
+(defclass boost-button (button message-actions-mixin)
+  ())
+
+(defmethod button/text ((button boost-button))
+  "Boost")
+
+(defclass generic-status ()
+  ())
+
+(defclass remote-status (generic-status)
   ((user :initarg :user
          :reader remote-status/user)
    (post :initarg :post
@@ -54,7 +76,7 @@
   (status-net:author/uri obj))
 
 (defun render-link (stream content-callback)
-    #+sbcl (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+  #+sbcl (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
   (clim:with-drawing-options (stream :ink *link-colour*)
     (funcall content-callback)))
 
@@ -72,7 +94,11 @@
   (render-link stream (lambda () (present-node-list (mention-link/content obj) stream))))
 
 (clim:define-presentation-method clim:present (obj (type user-link) stream (view t) &key)
-  (format stream "~a" (mastodon:account/display-name (user-link/account obj))))
+  (let* ((acct (user-link/account obj))
+         (display-name (mastodon:account/display-name acct)))
+    (format stream "~a" (if (and display-name (plusp (length display-name)))
+                            display-name
+                            (mastodon:account/acct acct)))))
 
 (clim:define-presentation-method clim:present (obj (type user-link-remote) stream (view t) &key)
   (render-link stream (lambda () (format stream "~a" (status-net:author/display-name (user-link-remote/author obj))))))
@@ -137,22 +163,33 @@
       (let ((body (xpath:first-node (xpath:evaluate "/h:html/h:body" doc))))
         (present-node-list (dom:child-nodes body) stream)))))
 
-(defun present-status (stream user-ptr user-id timestamp content)
+(defun present-status (stream user-ptr user-id timestamp content message-id)
   #+sbcl (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
   (clim:with-text-style (stream (clim:make-text-style nil :bold nil))
     (present-to-stream user-ptr stream))
   (clim:with-drawing-options (stream :ink *status-heading-colour*)
     (format stream " - ~a - ~a~%" user-id (format-readable-date timestamp)))
   (present-html-string content stream)
+  (format stream "~%~%  ")
+  (present-to-stream (make-instance 'reply-button :msg message-id) stream)
+  (present-to-stream (make-instance 'boost-button :msg message-id) stream)
   (format stream "~%"))
 
-(clim:define-presentation-method clim:present (obj (type mastodon:status) stream (view t) &key)
-  (let ((account (mastodon:status/account obj)))
+(clim:define-presentation-method clim:present (obj (type displayed-status) stream (view t) &key)
+  (let* ((status (displayed-status/status obj))
+         (account (mastodon:status/account status)))
     (present-status stream
                     (make-instance 'user-link :account account)
-                    (mastodon:account/acct (mastodon:status/account obj))
-                    (mastodon:status/created-at obj)
-                    (mastodon:status/content obj))))
+                    (mastodon:account/acct (mastodon:status/account status))
+                    (mastodon:status/created-at status)
+                    (mastodon:status/content status)
+                    (mastodon:status/url status))))
+
+(clim:define-presentation-method clim:present (obj (type displayed-status) stream (view clim:textual-view) &key)
+  (let ((status (displayed-status/status obj)))
+    (format stream "Post by ~a: ~a"
+            (mastodon:account/acct (mastodon:status/account status))
+            (mastodon:status/url status))))
 
 (clim:define-presentation-method clim:present (obj (type remote-status) stream (view t) &key)
   (let ((user (remote-status/user obj))
@@ -161,4 +198,10 @@
                     (make-instance 'user-link-remote :author user)
                     (status-net:author/name user)
                     (status-net:post/published msg)
-                    (status-net:post/content-html msg))))
+                    (status-net:post/content-html msg)
+                    (status-net:post/id msg))))
+
+(clim:define-presentation-method clim:present (obj (type remote-status) stream (view clim:textual-view) &key)
+  (let ((user (remote-status/user obj))
+        (msg (remote-status/post obj)))
+    (format stream "Post by ~a: ~a" (status-net:author/name user) (status-net:post/id msg))))

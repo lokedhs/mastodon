@@ -58,19 +58,21 @@
   (list :url src))
 
 (defmethod load-image-from-src ((url string) stream cache)
-  (multiple-value-bind (content code headers uri remote-stream should-close reason)
-      (drakma:http-request url
-                           :want-stream t
-                           :force-binary t)
-    (declare (ignore content uri reason))
-    (unwind-protect
-         (progn
-           (unless (= code 200)
-             (error "Failed to load image"))
-           (uiop:copy-stream-to-stream remote-stream stream :element-type '(unsigned-byte 8))
-           (cdr (assoc :content-type headers)))
-      (when should-close
-        (close remote-stream)))))
+  ;; TODO: Some image links refers to local files, for now we'll just ignore these
+  (when (cl-ppcre:scan "^https?://" url)
+    (multiple-value-bind (content code headers uri remote-stream should-close reason)
+        (drakma:http-request url
+                             :want-stream t
+                             :force-binary t)
+      (declare (ignore content uri reason))
+      (unwind-protect
+           (progn
+             (unless (= code 200)
+               (error "Failed to load image"))
+             (uiop:copy-stream-to-stream remote-stream stream :element-type '(unsigned-byte 8))
+             (cdr (assoc :content-type headers)))
+        (when should-close
+          (close remote-stream))))))
 
 (defun find-image-from-url (cache src callback)
   (let ((found (bordeaux-threads:with-lock-held ((image-cache/lock cache))

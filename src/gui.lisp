@@ -11,6 +11,7 @@
    (image :initform nil
           :accessor displayed-user/image)
    (timeline :initarg :timeline
+             :initform nil
              :accessor displayed-user/timeline)))
 
 (defun find-avatar (user min-width)
@@ -104,6 +105,10 @@
 (defun display-activity-list (frame stream)
   (present-activity-list (mastodon-frame/messages frame) stream))
 
+(defun display-post-message (frame stream)
+  (declare (ignore frame))
+  (format stream "Post message~%"))
+
 (clim:define-application-frame mastodon-frame ()
   ((credentials    :initarg :credentials
                    :accessor mastodon-frame/credentials)
@@ -120,11 +125,14 @@
           (user-info :application
                      :default-view (make-instance 'user-info-view)
                      :display-function 'display-user-info)
+          (post-message-form :application
+                             :display-function 'display-post-message)
           (bottom-adjuster (clim:make-pane 'clim-extensions:box-adjuster-gadget))
           (interaction-pane :interactor))
   (:layouts (default (clim:horizontally ()
-                       (3/10 user-info)
-                       (7/10 activity-list))
+                       (1/3 user-info)
+                       (1/3 activity-list)
+                       (1/3 post-message-form))
                      bottom-adjuster
                      interaction-pane)))
 
@@ -136,7 +144,19 @@
 
 (defun load-timeline (category local-p)
   (let ((timeline (mastodon:timeline category :cred (current-cred) :local local-p)))
-    (setf (mastodon-frame/messages clim:*application-frame*) timeline)))
+    (setf (mastodon-frame/messages clim:*application-frame*)
+          (mapcar (lambda (v)
+                    (make-instance 'displayed-status :status v))
+                  timeline))))
+
+(defun reply-to-remote-post (orig text cred)
+  (check-type orig remote-status)
+  (let* ((result (mastodon:search-from-site (mastodon:credentials/url cred)
+                                            (status-net:post/alternate-url (remote-status/post orig))))
+         (statuses (cdr (assoc :statuses result))))
+    (unless (alexandria:sequence-of-length-p statuses 1)
+      (error "Can't find post"))
+    (mastodon:post text :cred cred :reply-id (mastodon:status/id (first statuses)))))
 
 (define-mastodon-frame-command (home-timeline :name "Home")
     ()
@@ -172,9 +192,18 @@
   (bordeaux-threads:make-thread (lambda ()
                                   (uiop/run-program:run-program (list "xdg-open" url)))))
 
-(define-mastodon-frame-command (post-new :name "Post New")
+(define-mastodon-frame-command (post-new :name "Post")
     ((text 'string))
   (mastodon:post text))
+
+(define-mastodon-frame-command (reply :name "Reply")
+    ((in-reply-to 'generic-status)
+     (text 'string))
+  (etypecase in-reply-to
+    (displayed-status (mastodon:post text
+                                     :reply-id (mastodon:status/id (displayed-status/status in-reply-to))
+                                     :cred (current-cred)))
+    (remote-status (reply-to-remote-post in-reply-to text (current-cred)))))
 
 (clim:define-presentation-to-command-translator select-url
     (text-link open-url mastodon-frame)
@@ -196,6 +225,6 @@
     (setf lparallel:*kernel* (lparallel:make-kernel 10)))
   (let ((frame (clim:make-application-frame 'mastodon-frame
                                             :credentials mastodon:*credentials*
-                                            :width 700 :height 500
+                                            :width 1000 :height 700
                                             :left 10 :top 10)))
     (clim:run-frame-top-level frame)))

@@ -23,7 +23,13 @@
    #:account/note
    #:account/avatar
    #:status/created-at
-   #:account/acct))
+   #:account/acct
+   #:status/url
+   #:status/id
+   #:search-from-site
+   #:credentials
+   #:credentials/url
+   #:credentials/token))
 
 (defpackage :mastodon-gui
   (:use :cl)
