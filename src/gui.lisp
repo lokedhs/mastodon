@@ -100,7 +100,13 @@
     for first = t then nil
     unless first
       do (present-horizontal-separator stream)
-    do (present-to-stream msg stream)))
+    do (clim:updating-output (stream :unique-id msg
+                                     :id-test (lambda (a b)
+                                                (eq a b))
+                                     :cache-value (generic-status-cache-value msg)
+                                     :cache-test (lambda (a b)
+                                                   (equal a b)))
+         (present-to-stream msg stream))))
 
 (defun display-activity-list (frame stream)
   (present-activity-list (mastodon-frame/messages frame) stream))

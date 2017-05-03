@@ -5,9 +5,18 @@
 (defparameter *link-colour* (clim:make-rgb-color 0.0 0.0 1.0))
 (defparameter *status-heading-colour* (clim:make-rgb-color 0.2 0.4 0.2))
 
+(defclass generic-status ()
+  ())
+
+(defgeneric generic-status-cache-value (msg)
+  (:documentation "Returns the cache value for a given message"))
+
 (defclass displayed-status (generic-status)
   ((status :initarg :status
            :reader displayed-status/status)))
+
+(defmethod generic-status-cache-value ((obj displayed-status))
+  (mastodon:status/url (displayed-status/status obj)))
 
 (defclass message-actions-mixin ()
   ((msg :initarg :msg)))
@@ -24,14 +33,14 @@
 (defmethod button/text ((button boost-button))
   "Boost")
 
-(defclass generic-status ()
-  ())
-
 (defclass remote-status (generic-status)
   ((user :initarg :user
          :reader remote-status/user)
    (post :initarg :post
          :reader remote-status/post)))
+
+(defmethod generic-status-cache-value ((obj remote-status))
+  (status-net:post/id (remote-status/post obj)))
 
 (defclass user-ref ()
   ())
