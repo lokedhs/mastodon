@@ -59,7 +59,7 @@
                                  (setf (displayed-user/image displayed-user) (image-cache-entry/pixmap entry))
                                  (unless immediate-p
                                    (with-call-in-event-handler frame
-                                     (clim:redisplay-frame-pane frame (clim:find-pane-named frame 'user-info)))))))
+                                     (clim:redisplay-frame-pane frame (clim:find-pane-named frame 'user-info) :force-p t))))))
         (alexandria:when-let ((image (displayed-user/image displayed-user)))
           (clim:draw-pattern* stream image 0 0)
           (clim:stream-increment-cursor-position stream 0 (+ (clim:pattern-height image) 10)))
@@ -127,10 +127,12 @@
                    :reader mastodon-frame/image-cache))
   (:panes (activity-list :application
                          :default-view (make-instance 'activity-list-view)
-                         :display-function 'display-activity-list)
+                         :display-function 'display-activity-list
+                         :display-time t)
           (user-info :application
                      :default-view (make-instance 'user-info-view)
-                     :display-function 'display-user-info)
+                     :display-function 'display-user-info
+                     :display-time t)
           (post-message-form :application
                              :display-function 'display-post-message)
           (bottom-adjuster (clim:make-pane 'clim-extensions:box-adjuster-gadget))
@@ -149,11 +151,13 @@
   (mastodon-frame/credentials frame))
 
 (defun load-timeline (category local-p)
-  (let ((timeline (mastodon:timeline category :cred (current-cred) :local local-p)))
-    (setf (mastodon-frame/messages clim:*application-frame*)
+  (let ((frame clim:*application-frame*)
+        (timeline (mastodon:timeline category :cred (current-cred) :local local-p)))
+    (setf (mastodon-frame/messages frame)
           (mapcar (lambda (v)
                     (make-instance 'displayed-status :status v))
-                  timeline))))
+                  timeline))
+    (setf (clim:pane-needs-redisplay (clim:find-pane-named frame 'activity-list)) t)))
 
 (defun reply-to-remote-post (orig text cred)
   (check-type orig remote-status)
@@ -178,8 +182,9 @@
 
 (define-mastodon-frame-command (load-user :name "Show User")
     ((url 'string))
-  (let ((cred (mastodon-frame/credentials clim:*application-frame*)))
-    (setf (mastodon-frame/displayed-user clim:*application-frame*)
+  (let* ((frame clim:*application-frame*)
+         (cred (mastodon-frame/credentials frame)))
+    (setf (mastodon-frame/displayed-user frame)
           (cond ((mastodon:user-local-p url :cred cred)
                  (let ((user (mastodon:account-from-url url)))
                    (make-instance 'displayed-user :user user)))
@@ -191,7 +196,8 @@
                                                                       (make-instance 'remote-status
                                                                                      :user user
                                                                                      :post msg))
-                                                                    feed))))))))
+                                                                    feed))))))
+    (setf (clim:pane-needs-redisplay (clim:find-pane-named frame 'user-info)) t)))
 
 (define-mastodon-frame-command (open-url :name "Open URL")
     ((url 'string))
