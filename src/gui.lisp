@@ -56,10 +56,13 @@
           (find-image-from-url (mastodon-frame/image-cache frame)
                                avatar
                                (lambda (entry immediate-p)
-                                 (setf (displayed-user/image displayed-user) (image-cache-entry/pixmap entry))
-                                 (unless immediate-p
-                                   (with-call-in-event-handler frame
-                                     (clim:redisplay-frame-pane frame (clim:find-pane-named frame 'user-info) :force-p t))))))
+                                 (labels ((update-user ()
+                                            (setf (displayed-user/image displayed-user) (image-cache-entry/pixmap entry))))
+                                   (if immediate-p
+                                       (update-user)
+                                       (with-call-in-event-handler frame
+                                         (update-user)
+                                         (clim:redisplay-frame-pane frame (clim:find-pane-named frame 'user-info) :force-p t)))))))
         (alexandria:when-let ((image (displayed-user/image displayed-user)))
           (clim:draw-pattern* stream image 0 0)
           (clim:stream-increment-cursor-position stream 0 (+ (clim:pattern-height image) 10)))
@@ -76,7 +79,8 @@
         (alexandria:when-let ((timeline (displayed-user/timeline displayed-user)))
           (format stream "~%")
           (present-horizontal-separator stream)
-          (present-activity-list timeline stream))))))
+          (present-activity-list timeline stream))
+        (clim:scroll-extent stream 0 0)))))
 
 (defclass activity-list-view (clim:view)
   ())
@@ -109,7 +113,8 @@
          (present-to-stream msg stream))))
 
 (defun display-activity-list (frame stream)
-  (present-activity-list (mastodon-frame/messages frame) stream))
+  (present-activity-list (mastodon-frame/messages frame) stream)
+  (clim:scroll-extent stream 0 0))
 
 (defun display-post-message (frame stream)
   (declare (ignore frame))
@@ -157,7 +162,8 @@
           (mapcar (lambda (v)
                     (make-instance 'displayed-status :status v))
                   timeline))
-    (setf (clim:pane-needs-redisplay (clim:find-pane-named frame 'activity-list)) t)))
+    (let ((pane (clim:find-pane-named frame 'activity-list)))
+      (setf (clim:pane-needs-redisplay pane) t))))
 
 (defun reply-to-remote-post (orig text cred)
   (check-type orig remote-status)
