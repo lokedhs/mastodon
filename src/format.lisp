@@ -19,6 +19,7 @@
 (defgeneric generic-status/timestamp (status))
 (defgeneric generic-status/content (status))
 (defgeneric generic-status/message-id (status))
+(defgeneric generic-status/image-url (status))
 
 (defgeneric generic-status-cache-value (msg)
   (:documentation "Returns the cache value for a given message"))
@@ -30,6 +31,13 @@
 (defclass displayed-status (generic-status)
   ((status :initarg :status
            :reader displayed-status/status)))
+
+(defmethod print-object ((obj displayed-status) stream)
+  (print-unreadable-object (obj stream :type t :identity t)
+    (let ((displayed-status (displayed-status/status obj)))
+      (format stream "FROM ~s ID ~s"
+              (mastodon:account/acct (mastodon:status/account displayed-status))
+              (mastodon:status/url displayed-status)))))
 
 (defmethod generic-status/user-ptr ((obj displayed-status))
   (make-instance 'user-link :account (mastodon:status/account (displayed-status/status obj))))
@@ -46,6 +54,9 @@
 (defmethod generic-status/message-id ((obj displayed-status))
   (mastodon:status/url (displayed-status/status obj)))
 
+(defmethod generic-status/image-url ((obj displayed-status))
+  (mastodon:account/avatar (mastodon:status/account (displayed-status/status obj))))
+
 (defmethod generic-status-cache-value ((obj displayed-status))
   (mastodon:status/url (displayed-status/status obj)))
 
@@ -58,6 +69,12 @@
          :reader remote-status/user)
    (post :initarg :post
          :reader remote-status/post)))
+
+(defmethod print-object ((obj remote-status) stream)
+  (print-unreadable-object (obj stream :type t :identity t)
+    (format stream "FROM ~s ID ~s"
+            (status-net:author/name (remote-status/user obj))
+            (status-net:post/id (remote-status/post obj)))))
 
 (defmethod generic-status/user-ptr ((obj remote-status))
   (make-instance 'user-link-remote :author (remote-status/user obj)))
@@ -73,6 +90,9 @@
 
 (defmethod generic-status/message-id ((obj remote-status))
   (status-net:post/id (remote-status/post obj)))
+
+(defmethod generic-status/image-url ((obj remote-status))
+  (find-avatar (remote-status/user obj) 32))
 
 (defmethod generic-status-cache-value ((obj remote-status))
   (status-net:post/id (remote-status/post obj)))
@@ -191,7 +211,6 @@
 
 (defun parse-link (node)
   (let ((href (dom:get-attribute node "href")))
-    #+nil(format *debug-io* "href=~s, class=~s, type=~s~%" href (dom:get-attribute node "class") (resolve-class-from-node node))
     (make-instance (resolve-class-from-node node)
                    :content (dom:child-nodes node)
                    :href href
@@ -241,6 +260,29 @@
         (timestamp (generic-status/timestamp status))
         (content (generic-status/content status))
         (message-id (generic-status/message-id status)))
+    ;;
+    ;; Check if the image needs to be loaded
+    (unless (generic-status/image status)
+      (let ((image-url (generic-status/image-url status)))
+        (when image-url
+          (let ((frame clim:*application-frame*))
+            (find-image-from-url (mastodon-frame/image-cache frame)
+                                 image-url
+                                 (lambda (entry immediate-p)
+                                   (labels ((update-entry ()
+                                              (setf (generic-status/image status) (image-cache-entry/pixmap entry))))
+                                     (if immediate-p
+                                         (update-entry)
+                                         (with-call-in-event-handler frame
+                                           (update-entry)
+                                           (format *debug-io* "Should redisplay~%"))))))))))
+    ;;
+    (let ((image (generic-status/image status)))
+      (when image
+        (multiple-value-bind (x y)
+            (clim:stream-cursor-position stream)
+          (clim:draw-pattern* stream image x y)
+          (clim:stream-increment-cursor-position stream 0 (+ (clim:pattern-height image) 10)))))
     (clim:with-text-style (stream (clim:make-text-style nil :bold nil))
       (present-to-stream user-ptr stream))
     (clim:with-drawing-options (stream :ink *status-heading-colour*)

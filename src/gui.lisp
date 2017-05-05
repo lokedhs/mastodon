@@ -106,7 +106,8 @@
       do (present-horizontal-separator stream)
     do (clim:updating-output (stream :unique-id msg
                                      :id-test (lambda (a b)
-                                                (eq a b))
+                                                (and (eql (type-of a) (type-of b))
+                                                     (equal (generic-status/message-id a) (generic-status/message-id b))))
                                      :cache-value (generic-status-cache-value msg)
                                      :cache-test (lambda (a b)
                                                    (equal a b)))
@@ -238,6 +239,8 @@
     (obj)
   (list (user-ref/url obj)))
 
+(defvar *frame* nil)
+
 (defun mastodon-gui ()
   (unless lparallel:*kernel*
     (setf lparallel:*kernel* (lparallel:make-kernel 10)))
@@ -245,4 +248,5 @@
                                             :credentials mastodon:*credentials*
                                             :width 1000 :height 700
                                             :left 10 :top 10)))
+    (setq *frame* frame)
     (clim:run-frame-top-level frame)))
