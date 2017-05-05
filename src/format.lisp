@@ -251,19 +251,8 @@
     (present-to-stream (make-instance 'boost-button :msg message-id) stream)
     (format stream "~%")))
 
-(clim:define-presentation-method clim:present (obj (type displayed-status) stream (view t) &key)
+(clim:define-presentation-method clim:present (obj (type generic-status) stream (view t) &key)
   (present-status stream obj))
 
-(clim:define-presentation-method clim:present (obj (type displayed-status) stream (view clim:textual-view) &key)
-  (let ((status (displayed-status/status obj)))
-    (format stream "Post by ~a: ~a"
-            (mastodon:account/acct (mastodon:status/account status))
-            (mastodon:status/url status))))
-
-(clim:define-presentation-method clim:present (obj (type remote-status) stream (view t) &key)
-  (present-status stream obj))
-
-(clim:define-presentation-method clim:present (obj (type remote-status) stream (view clim:textual-view) &key)
-  (let ((user (remote-status/user obj))
-        (msg (remote-status/post obj)))
-    (format stream "Post by ~a: ~a" (status-net:author/name user) (status-net:post/id msg))))
+(clim:define-presentation-method clim:present (obj (type generic-status) stream (view clim:textual-view) &key)
+  (format stream "Post: ~a" (generic-status/message-id)))
