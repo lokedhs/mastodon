@@ -202,7 +202,8 @@
                                                   :timeline (mapcar (lambda (msg)
                                                                       (make-instance 'remote-status
                                                                                      :user user
-                                                                                     :post msg))
+                                                                                     :post msg
+                                                                                     :include-image-p nil))
                                                                     feed))))))
     (setf (clim:pane-needs-redisplay (clim:find-pane-named frame 'user-info)) t)))
 

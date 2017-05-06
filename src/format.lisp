@@ -10,9 +10,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defclass generic-status ()
-  ((image :initarg :image
-          :initform nil
-          :accessor generic-status/image)))
+  ((image           :initarg :image
+                    :initform nil
+                    :accessor generic-status/image)
+   (include-image-p :initarg :include-image-p
+                    :initform t
+                    :reader generic-status/include-image-p)))
 
 (defgeneric generic-status/user-ptr (status))
 (defgeneric generic-status/user-id (status))
@@ -253,7 +256,7 @@
       (let ((body (xpath:first-node (xpath:evaluate "/h:html/h:body" doc))))
         (present-node-list (dom:child-nodes body) stream)))))
 
-(defun present-status (stream status include-avatars-p)
+(defun present-status (stream status)
   #+sbcl (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
   (let ((user-ptr (generic-status/user-ptr status))
         (user-id (generic-status/user-id status))
@@ -261,29 +264,30 @@
         (content (generic-status/content status))
         (message-id (generic-status/message-id status)))
     ;;
-    (when include-avatars-p
-     ;; Check if the image needs to be loaded
-     (unless (generic-status/image status)
-       (let ((image-url (generic-status/image-url status)))
-         (when image-url
-           (let ((frame clim:*application-frame*))
-             (find-image-from-url (mastodon-frame/image-cache frame)
-                                  image-url
-                                  (lambda (entry immediate-p)
-                                    (labels ((update-entry ()
-                                               (setf (generic-status/image status) (image-cache-entry/pixmap entry))))
-                                      (if immediate-p
-                                          (update-entry)
-                                          (with-call-in-event-handler frame
-                                            (update-entry)
-                                            (format *debug-io* "Should redisplay~%"))))))))))
-     ;;
-     (let ((image (generic-status/image status)))
-       (when image
-         (multiple-value-bind (x y)
-             (clim:stream-cursor-position stream)
-           (clim:draw-pattern* stream image x y)
-           (clim:stream-increment-cursor-position stream 0 (+ (clim:pattern-height image) 10))))))
+    (when (generic-status/include-image-p status)
+      ;; Check if the image needs to be loaded
+      (unless (generic-status/image status)
+        (let ((image-url (generic-status/image-url status)))
+          (when image-url
+            (let ((frame clim:*application-frame*))
+              (find-image-from-url (mastodon-frame/image-cache frame)
+                                   image-url
+                                   (lambda (entry immediate-p)
+                                     (labels ((update-entry ()
+                                                (setf (generic-status/image status) (image-cache-entry/pixmap entry))))
+                                       (if immediate-p
+                                           (update-entry)
+                                           (with-call-in-event-handler frame
+                                             (update-entry)
+                                             (format *debug-io* "Should redisplay~%"))))))))))
+      ;;
+      (let ((image (generic-status/image status)))
+        (when image
+          (multiple-value-bind (x y)
+              (clim:stream-cursor-position stream)
+            (clim:draw-pattern* stream image x y)
+            (clim:stream-increment-cursor-position stream 0 (+ (clim:pattern-height image) 10))))))
+    ;;
     (clim:with-text-style (stream (clim:make-text-style nil :bold nil))
       (present-to-stream user-ptr stream))
     (clim:with-drawing-options (stream :ink *status-heading-colour*)
@@ -295,10 +299,7 @@
     (format stream "~%")))
 
 (clim:define-presentation-method clim:present (obj (type generic-status) stream (view t) &key)
-  (present-status stream obj t))
-
-(clim:define-presentation-method clim:present (obj (type generic-status) stream (view user-info-view) &key)
-  (present-status stream obj nil))
+  (present-status stream obj))
 
 (clim:define-presentation-method clim:present (obj (type generic-status) stream (view clim:textual-view) &key)
-  (format stream "Post: ~a" (generic-status/message-id)))
+  (format stream "Post: ~a" (generic-status/message-id obj)))
