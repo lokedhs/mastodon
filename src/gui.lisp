@@ -166,14 +166,17 @@
     (let ((pane (clim:find-pane-named frame 'activity-list)))
       (setf (clim:pane-needs-redisplay pane) t))))
 
-(defun reply-to-remote-post (orig text cred)
-  (check-type orig remote-status)
+(defun replicate-remote-message (status cred)
+  (check-type status remote-status)
   (let* ((result (mastodon:search-from-site (mastodon:credentials/url cred)
-                                            (status-net:post/alternate-url (remote-status/post orig))))
+                                            (status-net:post/alternate-url (remote-status/post status))))
          (statuses (cdr (assoc :statuses result))))
     (unless (alexandria:sequence-of-length-p statuses 1)
       (error "Can't find post"))
-    (mastodon:post text :cred cred :reply-id (mastodon:status/id (first statuses)))))
+    (first statuses)))
+
+(defun reply-to-remote-post (orig text cred)
+  (mastodon:post text :cred cred :reply-id (mastodon:status/id (replicate-remote-message orig cred))))
 
 (define-mastodon-frame-command (home-timeline :name "Home")
     ()
@@ -225,6 +228,32 @@
                                      :cred (current-cred)))
     (remote-status (reply-to-remote-post in-reply-to text (current-cred)))))
 
+(defun ensure-post-id (msg cred)
+  (let ((status (etypecase msg
+                  (displayed-status (displayed-status/status msg))
+                  (remote-status (replicate-remote-message (remote-status/post msg) cred)))))
+    (mastodon:status/id status)))
+
+(define-mastodon-frame-command (reblog-post :name "Reblog")
+    ((message 'generic-status))
+  (let ((cred (current-cred)))
+    (mastodon:reblog (ensure-post-id message cred) :cred cred)))
+
+(define-mastodon-frame-command (unreblog-post :name "Unreblog")
+    ((message 'generic-status))
+  (let ((cred (current-cred)))
+    (mastodon:unreblog (ensure-post-id message cred) :cred cred)))
+
+(define-mastodon-frame-command (favourite-post :name "Favourite")
+    ((message 'generic-status))
+  (let ((cred (current-cred)))
+    (mastodon:favourite (ensure-post-id message cred) :cred cred)))
+
+(define-mastodon-frame-command (unfavourite-post :name "Unfavourite")
+    ((message 'generic-status))
+  (let ((cred (current-cred)))
+    (mastodon:unfavourite (ensure-post-id message cred) :cred cred)))
+
 (clim:define-presentation-to-command-translator select-url
     (text-link open-url mastodon-frame)
     (obj)
@@ -239,6 +268,16 @@
     (mention-link load-user mastodon-frame)
     (obj)
   (list (user-ref/url obj)))
+
+(clim:define-presentation-to-command-translator select-boost
+    (boost-button reblog-post mastodon-frame)
+    (obj)
+  (list (button-message obj)))
+
+(clim:define-presentation-to-command-translator select-favourite
+    (favourite-button favourite-post mastodon-frame)
+    (obj)
+  (list (button-message obj)))
 
 (defvar *frame* nil)
 

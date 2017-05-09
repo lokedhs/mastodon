@@ -105,7 +105,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defclass message-actions-mixin ()
-  ((msg :initarg :msg)))
+  ((msg :initarg :msg
+        :reader button-message)))
 
 (defclass reply-button (button message-actions-mixin)
   ())
@@ -118,6 +119,12 @@
 
 (defmethod button/text ((button boost-button))
   "Boost")
+
+(defclass favourite-button (button message-actions-mixin)
+  ())
+
+(defmethod button/text ((button favourite-button))
+  "Favourite")
 
 (defclass user-ref ()
   ())
@@ -295,7 +302,8 @@
     (present-html-string content stream)
     (format stream "~%~%  ")
     (present-to-stream (make-instance 'reply-button :msg message-id) stream)
-    (present-to-stream (make-instance 'boost-button :msg message-id) stream)
+    (present-to-stream (make-instance 'boost-button :msg status) stream)
+    (present-to-stream (make-instance 'favourite-button :msg status) stream)
     (format stream "~%")))
 
 (clim:define-presentation-method clim:present (obj (type generic-status) stream (view t) &key)

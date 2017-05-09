@@ -29,7 +29,11 @@
    #:search-from-site
    #:credentials
    #:credentials/url
-   #:credentials/token))
+   #:credentials/token
+   #:favourite
+   #:unfavourite
+   #:reblog
+   #:unreblog))
 
 (defpackage :mastodon-gui
   (:use :cl)

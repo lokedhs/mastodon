@@ -18,7 +18,7 @@
     (unwind-protect
          (progn
            (unless (= code 200)
-             (error "HTTP error when requesting application id: ~a. Reason: ~a" code reason-string))
+             (error "HTTP error when sending request: ~a. Reason: ~a" code reason-string))
            (let ((result (yason:parse (flexi-streams:make-flexi-stream stream :external-format :utf-8))))
              result))
       (when need-close
@@ -216,6 +216,30 @@
                                                           ,@(if sensitive `(("sensitive" . "true")))
                                                           ,@(if sensitive-text `(("spolier_text" . ,sensitive-text)))))))
     (parse-json-object 'status result)))
+
+(defun favourite (message-id &key (cred *credentials*))
+  (check-type message-id integer)
+  (authenticated-http-request (format nil "api/v1/statuses/~a/favourite" message-id)
+                              cred
+                              :method :post))
+
+(defun unfavourite (message-id &key (cred *credentials*))
+  (check-type message-id integer)
+  (authenticated-http-request (format nil "api/v1/statuses/~a/unfavourite" message-id)
+                              cred
+                              :method :post))
+
+(defun reblog (message-id &key (cred *credentials*))
+  (check-type message-id integer)
+  (authenticated-http-request (format nil "api/v1/statuses/~a/reblog" message-id)
+                              cred
+                              :method :post))
+
+(defun unreblog (message-id &key (cred *credentials*))
+  (check-type message-id integer)
+  (authenticated-http-request (format nil "api/v1/statuses/~a/unreblog" message-id)
+                              cred
+                              :method :post))
 
 (defun public-stream (&key (cred *credentials*))
   (multiple-value-bind (content code return-headers url-reply stream-ret need-close reason-string)
