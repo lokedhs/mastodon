@@ -14,6 +14,7 @@
     (loop
       with pane-width = (- (clim:bounding-rectangle-width stream) 18) ;; add some extra space to accommodate the scrollbar
       for word in words
+      unless (equal word #.(princ-to-string #\Newline))
       do (let ((x (clim:cursor-position (clim:stream-text-cursor stream))))
            (when (> (+ x (clim:stream-string-width stream word)) pane-width)
              (format stream "~%"))

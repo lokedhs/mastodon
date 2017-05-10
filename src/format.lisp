@@ -155,14 +155,14 @@
 (defmethod button/text ((button unfavourite-button))
   "Remove Favourite")
 
-(defclass user-ref ()
+(defclass wrapped-user ()
   ())
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; user-ref
+;;; wrapped-user
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defgeneric user-ref/url (user-ref)
+(defgeneric wrapped-user/url (wrapped-user)
   (:documentation "Returns the URL for the given user"))
 
 (defclass text-link ()
@@ -180,25 +180,25 @@
   ((content :initarg :content
             :reader text-link-string/content)))
 
-(defclass mention-link (text-link user-ref)
+(defclass mention-link (text-link wrapped-user)
   ((content :initarg :content
             :reader mention-link/content)))
 
-(defclass user-link (user-ref)
+(defclass user-link (wrapped-user)
   ((account :initarg :account
             :reader user-link/account)))
 
-(defclass user-link-remote (user-ref)
+(defclass user-link-remote (wrapped-user)
   ((author :initarg :author
            :reader user-link-remote/author)))
 
-(defmethod user-ref/url ((obj user-link))
+(defmethod wrapped-user/url ((obj user-link))
   (mastodon:account/url (user-link/account obj)))
 
-(defmethod user-ref/url ((obj mention-link))
+(defmethod wrapped-user/url ((obj mention-link))
   (text-link/href obj))
 
-(defmethod user-ref/url ((obj user-link-remote))
+(defmethod wrapped-user/url ((obj user-link-remote))
   (status-net:author/uri obj))
 
 (defun render-link (stream content-callback)

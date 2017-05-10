@@ -5,14 +5,96 @@
 (defclass user-info-view (clim:view)
   ())
 
-(defclass displayed-user ()
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; generic-user
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defclass generic-user ()
+  ((image :initform nil
+          :accessor generic-user/image)))
+
+(defgeneric generic-user/display-name (user))
+(defgeneric generic-user/url (user))
+(defgeneric generic-user/note (user))
+(defgeneric generic-user/avatar (user))
+(defgeneric generic-user/timeline (user))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Local mastodon users
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defclass displayed-user (generic-user wrapped-user)
   ((user  :initarg :user
           :reader displayed-user/user)
-   (image :initform nil
-          :accessor displayed-user/image)
    (timeline :initarg :timeline
              :initform nil
              :accessor displayed-user/timeline)))
+
+(defmethod generic-user/display-name ((obj displayed-user))
+  (mastodon:account/display-name (displayed-user/user obj)))
+
+(defmethod generic-user/url ((obj displayed-user))
+  (mastodon:account/url (displayed-user/user obj)))
+
+(defmethod generic-user/note ((obj displayed-user))
+  (list (mastodon:account/note (displayed-user/user obj)) :html))
+
+(defmethod generic-user/avatar ((obj displayed-user))
+  (mastodon:account/avatar (displayed-user/user obj)))
+
+(defmethod wrapped-user/url ((obj displayed-user))
+  (mastodon:account/url (displayed-user/user obj)))
+
+(defmethod generic-user/timeline ((obj displayed-user))
+  (displayed-user/timeline obj))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Remote statusnet users
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defclass remote-user (generic-user wrapped-user)
+  ((user  :initarg :user
+          :reader remote-user/user)
+   (image :initform nil
+          :accessor remote-user/image)
+   (timeline :initarg :timeline
+             :initform nil
+             :accessor remote-user/timeline)))
+
+(defmethod generic-user/display-name ((obj remote-user))
+  (status-net:author/name (remote-user/user obj)))
+
+(defmethod generic-user/url ((obj remote-user))
+  (status-net:author/uri (remote-user/user obj)))
+
+(defmethod generic-user/note ((obj remote-user))
+  (let ((user (remote-user/user obj)))
+    (list (status-net:author/summary user)
+          (if (equal (status-net:author/summary-type user) "html") :html nil))))
+
+(defmethod generic-user/avatar ((obj remote-user))
+  (find-avatar (remote-user/user obj) 128))
+
+(defmethod wrapped-user/url ((obj remote-user))
+  (status-net:author/uri (remote-user/user obj)))
+
+(defmethod generic-user/timeline ((obj remote-user))
+  (remote-user/timeline obj))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Buttons
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defclass follow-user-button (button)
+  ((user :initarg :user
+         :reader follow-user-button/user)))
+
+(defmethod button/text ((button follow-user-button))
+  "Follow")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; User display
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun find-avatar (user min-width)
   "Return the smallest avatar for USER that is equal or larger than MIN-WIDTH"
@@ -31,56 +113,44 @@
            (setq found-width width))
     finally (return (status-net:avatar/url found))))
 
-(defun extract-mastodon-account-info (user)
-  (list (mastodon:account/display-name user)
-        (mastodon:account/url user)
-        (mastodon:account/note user)
-        :html
-        (mastodon:account/avatar user)))
-
-(defun extract-status-net-account-info (user)
-  (list (status-net:author/name user)
-        (status-net:author/uri user)
-        (status-net:author/summary user)
-        (if (equal (status-net:author/summary-type user) "html") :html nil)
-        (find-avatar user 128)))
-
 (defun display-user-info (frame stream)
-  (alexandria:when-let ((displayed-user (mastodon-frame/displayed-user frame)))
-    (let ((user (displayed-user/user displayed-user)))
-      (destructuring-bind (display-name url note note-type avatar)
-          (etypecase user
-            (mastodon:account (extract-mastodon-account-info user))
-            (status-net:author (extract-status-net-account-info user)))
-        (when avatar
-          (find-image-from-url (mastodon-frame/image-cache frame)
-                               avatar
-                               (lambda (entry immediate-p)
-                                 (labels ((update-user ()
-                                            (setf (displayed-user/image displayed-user) (image-cache-entry/pixmap entry))))
-                                   (if immediate-p
+  (alexandria:when-let ((user (mastodon-frame/displayed-user frame)))
+    (let ((display-name (generic-user/display-name user))
+          (url (generic-user/url user))
+          (avatar (generic-user/avatar user)))
+      (when avatar
+        (find-image-from-url (mastodon-frame/image-cache frame)
+                             avatar
+                             (lambda (entry immediate-p)
+                               (labels ((update-user ()
+                                          (setf (generic-user/image user) (image-cache-entry/pixmap entry))))
+                                 (if immediate-p
+                                     (update-user)
+                                     (with-call-in-event-handler frame
                                        (update-user)
-                                       (with-call-in-event-handler frame
-                                         (update-user)
-                                         (clim:redisplay-frame-pane frame (clim:find-pane-named frame 'user-info) :force-p t)))))))
-        (alexandria:when-let ((image (displayed-user/image displayed-user)))
-          (clim:draw-pattern* stream image 0 0)
-          (clim:stream-increment-cursor-position stream 0 (+ (clim:pattern-height image) 10)))
-        (clim:with-text-size (stream 20)
-          (format stream "~a" display-name))
+                                       (clim:redisplay-frame-pane frame (clim:find-pane-named frame 'user-info) :force-p t)))))))
+      (alexandria:when-let ((image (generic-user/image user)))
+        (clim:draw-pattern* stream image 0 0)
+        (clim:stream-increment-cursor-position stream 0 (+ (clim:pattern-height image) 10)))
+      (clim:with-text-size (stream 20)
+        (format stream "~a" display-name))
+      (destructuring-bind (note note-type)
+          (generic-user/note user)
         (when note
           (format stream "~%~%")
           (if (eq note-type :html)
               (present-html-string note stream)
-              (present-multiline-with-wordwrap note stream)))
-        (format stream "~%~%")
-        (present-to-stream (make-instance 'text-link-string :content url :href url) stream)
-        ;;
-        (alexandria:when-let ((timeline (displayed-user/timeline displayed-user)))
-          (format stream "~%")
-          (present-horizontal-separator stream)
-          (present-activity-list timeline stream))
-        (clim:scroll-extent stream 0 0)))))
+              (present-multiline-with-wordwrap note stream))))
+      (format stream "~%~%")
+      (present-to-stream (make-instance 'text-link-string :content url :href url) stream)
+      (format stream "~%~%")
+      (present-to-stream (make-instance 'follow-user-button :user user) stream)
+      ;;
+      (alexandria:when-let ((timeline (generic-user/timeline user)))
+        (format stream "~%")
+        (present-horizontal-separator stream)
+        (present-activity-list timeline stream))
+      (clim:scroll-extent stream 0 0))))
 
 (defclass activity-list-view (clim:view)
   ())
@@ -191,8 +261,8 @@
   (load-timeline "public" t))
 
 (define-mastodon-frame-command (load-user :name "Show User")
-    ((user 'user-ref))
-  (let* ((url (user-ref/url user))
+    ((user 'wrapped-user))
+  (let* ((url (wrapped-user/url user))
          (frame clim:*application-frame*)
          (cred (mastodon-frame/credentials frame)))
     (setf (mastodon-frame/displayed-user frame)
@@ -202,13 +272,13 @@
                 (t
                  (destructuring-bind (user feed)
                      (status-net:load-feed url)
-                   (make-instance 'displayed-user :user user
-                                                  :timeline (mapcar (lambda (msg)
-                                                                      (make-instance 'remote-status
-                                                                                     :user user
-                                                                                     :post msg
-                                                                                     :include-image-p nil))
-                                                                    feed))))))
+                   (make-instance 'remote-user :user user
+                                               :timeline (mapcar (lambda (msg)
+                                                                   (make-instance 'remote-status
+                                                                                  :user user
+                                                                                  :post msg
+                                                                                  :include-image-p nil))
+                                                                 feed))))))
     (setf (clim:pane-needs-redisplay (clim:find-pane-named frame 'user-info)) t)))
 
 (define-mastodon-frame-command (open-url :name "Open URL")
@@ -256,9 +326,9 @@
     (mastodon:unfavourite (ensure-post-id message cred) :cred cred)))
 
 (define-mastodon-frame-command (follow-account :name "Follow")
-    ((user 'user-ref))
+    ((user 'wrapped-user))
   (let ((cred (current-cred)))
-    (mastodon:follow-from-url (user-ref/url user) :cred cred)))
+    (mastodon:follow-from-url (wrapped-user/url user) :cred cred)))
 
 (clim:define-presentation-to-command-translator select-url
     (text-link open-url mastodon-frame)
@@ -266,14 +336,14 @@
   (list (text-link/href obj)))
 
 (clim:define-presentation-to-command-translator select-user
-    (user-ref load-user mastodon-frame)
+    (wrapped-user load-user mastodon-frame)
     (obj)
   (list obj))
 
 (clim:define-presentation-to-command-translator select-mention-link
     (mention-link load-user mastodon-frame)
     (obj)
-  (list (user-ref/url obj)))
+  (list (wrapped-user/url obj)))
 
 (clim:define-presentation-to-command-translator select-reblog
     (reblog-button reblog-post mastodon-frame)
@@ -295,13 +365,18 @@
     (obj)
   (list (button-message obj)))
 
+(clim:define-presentation-to-command-translator select-follow-user
+    (follow-user-button follow-account mastodon-frame)
+    (obj)
+  (list (follow-user-button/user obj)))
+
 (defvar *frame* nil)
 
-(defun mastodon-gui ()
+(defun mastodon-gui (&optional creds)
   (unless lparallel:*kernel*
     (setf lparallel:*kernel* (lparallel:make-kernel 10)))
   (let ((frame (clim:make-application-frame 'mastodon-frame
-                                            :credentials mastodon:*credentials*
+                                            :credentials (or creds mastodon:*credentials*)
                                             :width 1000 :height 700
                                             :left 10 :top 10)))
     (setq *frame* frame)
