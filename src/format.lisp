@@ -23,6 +23,8 @@
 (defgeneric generic-status/content (status))
 (defgeneric generic-status/message-id (status))
 (defgeneric generic-status/image-url (status))
+(defgeneric generic-status/reblogged-p (status))
+(defgeneric generic-status/favourited-p (status))
 
 (defgeneric generic-status-cache-value (msg)
   (:documentation "Returns the cache value for a given message"))
@@ -59,6 +61,12 @@
 
 (defmethod generic-status/image-url ((obj displayed-status))
   (mastodon:account/avatar (mastodon:status/account (displayed-status/status obj))))
+
+(defmethod generic-status/reblogged-p ((obj displayed-status))
+  (mastodon:status/reblogged (displayed-status/status obj)))
+
+(defmethod generic-status/favourited-p ((obj displayed-status))
+  (mastodon:status/favourited (displayed-status/status obj)))
 
 (defmethod generic-status-cache-value ((obj displayed-status))
   (mastodon:status/url (displayed-status/status obj)))
@@ -97,6 +105,15 @@
 (defmethod generic-status/image-url ((obj remote-status))
   (find-avatar (remote-status/user obj) 32))
 
+(defmethod generic-status/reblogged-p ((obj remote-status))
+  ;; In order to correctly read the value we'd need to force a
+  ;; replication of the message first. This is probably a bit
+  ;; overkill, so we'll just return false here.
+  nil)
+
+(defmethod generic-status/favourited-p ((obj remote-status))
+  nil)
+
 (defmethod generic-status-cache-value ((obj remote-status))
   (status-net:post/id (remote-status/post obj)))
 
@@ -114,17 +131,29 @@
 (defmethod button/text ((button reply-button))
   "Reply")
 
-(defclass boost-button (button message-actions-mixin)
+(defclass reblog-button (button message-actions-mixin)
   ())
 
-(defmethod button/text ((button boost-button))
+(defmethod button/text ((button reblog-button))
   "Boost")
+
+(defclass unreblog-button (button message-actions-mixin)
+  ())
+
+(defmethod button/text ((button unreblog-button))
+  "Remove Boost")
 
 (defclass favourite-button (button message-actions-mixin)
   ())
 
 (defmethod button/text ((button favourite-button))
   "Favourite")
+
+(defclass unfavourite-button (button message-actions-mixin)
+  ())
+
+(defmethod button/text ((button unfavourite-button))
+  "Remove Favourite")
 
 (defclass user-ref ()
   ())
@@ -285,8 +314,7 @@
                                        (if immediate-p
                                            (update-entry)
                                            (with-call-in-event-handler frame
-                                             (update-entry)
-                                             (format *debug-io* "Should redisplay~%"))))))))))
+                                             (update-entry))))))))))
       ;;
       (let ((image (generic-status/image status)))
         (when image
@@ -302,8 +330,14 @@
     (present-html-string content stream)
     (format stream "~%~%  ")
     (present-to-stream (make-instance 'reply-button :msg message-id) stream)
-    (present-to-stream (make-instance 'boost-button :msg status) stream)
-    (present-to-stream (make-instance 'favourite-button :msg status) stream)
+    (present-to-stream (if (generic-status/reblogged-p status)
+                           (make-instance 'unreblog-button :msg status)
+                           (make-instance 'reblog-button :msg status))
+                       stream)
+    (present-to-stream (if (generic-status/favourited-p status)
+                           (make-instance 'unfavourite-button :msg status)
+                           (make-instance 'favourite-button :msg status))
+                       stream)
     (format stream "~%")))
 
 (clim:define-presentation-method clim:present (obj (type generic-status) stream (view t) &key)

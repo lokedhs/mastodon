@@ -133,8 +133,10 @@
                            :reader status/created-at)
    (reblogs-count          :json-field "reblogs_count")
    (favourites-count       :json-field "favourites_count")
-   (reblogged              :json-field "reblogged")
-   (favourited             :json-field "favourited")
+   (reblogged              :json-field "reblogged"
+                           :reader status/reblogged)
+   (favourited             :json-field "favourited"
+                           :reader status/favourited)
    (sensistive             :json-field "sensistive"
                            :json-default-value nil)
    (spoiler-text           :json-field "spoiler_text")

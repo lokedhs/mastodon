@@ -33,7 +33,9 @@
    #:favourite
    #:unfavourite
    #:reblog
-   #:unreblog))
+   #:unreblog
+   #:status/favourited
+   #:status/reblogged))
 
 (defpackage :mastodon-gui
   (:use :cl)

@@ -191,8 +191,9 @@
   (load-timeline "public" t))
 
 (define-mastodon-frame-command (load-user :name "Show User")
-    ((url 'string))
-  (let* ((frame clim:*application-frame*)
+    ((user 'user-ref))
+  (let* ((url (user-ref/url user))
+         (frame clim:*application-frame*)
          (cred (mastodon-frame/credentials frame)))
     (setf (mastodon-frame/displayed-user frame)
           (cond ((mastodon:user-local-p url :cred cred)
@@ -254,6 +255,11 @@
   (let ((cred (current-cred)))
     (mastodon:unfavourite (ensure-post-id message cred) :cred cred)))
 
+(define-mastodon-frame-command (follow-account :name "Follow")
+    ((user 'user-ref))
+  (let ((cred (current-cred)))
+    (mastodon:follow-from-url (user-ref/url user) :cred cred)))
+
 (clim:define-presentation-to-command-translator select-url
     (text-link open-url mastodon-frame)
     (obj)
@@ -262,20 +268,30 @@
 (clim:define-presentation-to-command-translator select-user
     (user-ref load-user mastodon-frame)
     (obj)
-  (list (user-ref/url obj)))
+  (list obj))
 
 (clim:define-presentation-to-command-translator select-mention-link
     (mention-link load-user mastodon-frame)
     (obj)
   (list (user-ref/url obj)))
 
-(clim:define-presentation-to-command-translator select-boost
-    (boost-button reblog-post mastodon-frame)
+(clim:define-presentation-to-command-translator select-reblog
+    (reblog-button reblog-post mastodon-frame)
+    (obj)
+  (list (button-message obj)))
+
+(clim:define-presentation-to-command-translator select-unreblog
+    (unreblog-button unreblog-post mastodon-frame)
     (obj)
   (list (button-message obj)))
 
 (clim:define-presentation-to-command-translator select-favourite
     (favourite-button favourite-post mastodon-frame)
+    (obj)
+  (list (button-message obj)))
+
+(clim:define-presentation-to-command-translator select-unfavourite
+    (unfavourite-button unfavourite-post mastodon-frame)
     (obj)
   (list (button-message obj)))
 
