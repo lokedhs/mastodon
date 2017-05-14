@@ -268,7 +268,7 @@
                                (setq event-type content))
                               ((and (not (null event-type))
                                     (equal tag "data"))
-                               (funcall callback-fn event-type (yason:parse content))
+                               (funcall callback-fn event-type (parse-json-object 'status (yason:parse content)))
                                (setq event-type nil))
                               (t
                                (warn "Unexpected event. tag=~s, content=~s, event-type=~s" tag content event-type)))))))))
