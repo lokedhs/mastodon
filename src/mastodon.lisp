@@ -243,9 +243,9 @@
                               cred
                               :method :post))
 
-(defun public-stream (&key (cred *credentials*))
+(defun public-stream (callback-fn &key (cred *credentials*))
   (multiple-value-bind (content code return-headers url-reply stream-ret need-close reason-string)
-      (drakma:http-request (make-mastodon-url "api/v1/streaming/public" cred)
+      (drakma:http-request (make-mastodon-url "api/v1/streaming/user" cred)
                            :want-stream t
                            :force-binary t
                            :additional-headers `((:authorization . ,(format nil "Bearer ~a" (credentials/token cred)))))
@@ -256,11 +256,21 @@
              (error "HTTP error when connecting. id: ~a. Reason: ~a" code reason-string))
            (let ((stream (flexi-streams:make-flexi-stream stream-ret :external-format :utf-8)))
              (loop
+               with event-type = nil
                for line = (read-line stream)
-               do (print line)
-               unless (or (zerop (length line))
-                          (eql (aref line 0) #\:))
-                 do (print 'proper-line))))
+               do (let ((pos (position #\: line)))
+                    (when (and pos (> pos 0))
+                      (let ((tag (subseq line 0 pos))
+                            (content (string-trim '(#\Space) (subseq line (1+ pos)))))
+                        (cond ((and (null event-type)
+                                    (equal tag "event"))
+                               (setq event-type content))
+                              ((and (not (null event-type))
+                                    (equal tag "data"))
+                               (funcall callback-fn event-type (yason:parse content))
+                               (setq event-type nil))
+                              (t
+                               (warn "Unexpected event. tag=~s, content=~s, event-type=~s" tag content event-type)))))))))
       (when need-close
         (close stream-ret)))))
 
