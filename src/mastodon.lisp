@@ -243,7 +243,7 @@
                               cred
                               :method :post))
 
-(defun load-stream (name callback-fn cred params)
+(defun load-stream (name params callback-fn cred)
   (multiple-value-bind (content code return-headers url-reply stream-ret need-close reason-string)
       (drakma:http-request (make-mastodon-url name cred)
                            :want-stream t
