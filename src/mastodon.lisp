@@ -243,11 +243,12 @@
                               cred
                               :method :post))
 
-(defun public-stream (callback-fn &key (cred *credentials*))
+(defun load-stream (name callback-fn cred params)
   (multiple-value-bind (content code return-headers url-reply stream-ret need-close reason-string)
-      (drakma:http-request (make-mastodon-url "api/v1/streaming/user" cred)
+      (drakma:http-request (make-mastodon-url name cred)
                            :want-stream t
                            :force-binary t
+                           :parameters params
                            :additional-headers `((:authorization . ,(format nil "Bearer ~a" (credentials/token cred)))))
     (declare (ignore content return-headers url-reply))
     (unwind-protect
@@ -273,6 +274,15 @@
                                (warn "Unexpected event. tag=~s, content=~s, event-type=~s" tag content event-type)))))))))
       (when need-close
         (close stream-ret)))))
+
+(defun stream-public (callback-fn &key (cred *credentials*))
+  (load-stream "api/v1/streaming/public" nil callback-fn cred))
+
+(defun stream-user (callback-fn &key (cred *credentials*))
+  (load-stream "api/v1/streaming/user" nil callback-fn cred))
+
+(defun stream-hashtag (hashtag callback-fn &key (cred *credentials*))
+  (load-stream "api/v1/streaming/hashtag" `(("tag" . ,hashtag)) callback-fn cred))
 
 (defun search-from-site (url query &key resolve)
   (multiple-value-bind (content code return-headers url-reply stream need-close reason-string)

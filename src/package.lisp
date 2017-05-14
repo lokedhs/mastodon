@@ -35,7 +35,10 @@
    #:reblog
    #:unreblog
    #:status/favourited
-   #:status/reblogged))
+   #:status/reblogged
+   #:stream-public
+   #:stream-user
+   #:stream-hashtag))
 
 (defpackage :mastodon-gui
   (:use :cl)
