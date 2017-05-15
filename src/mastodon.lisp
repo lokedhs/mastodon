@@ -243,7 +243,7 @@
                               cred
                               :method :post))
 
-(defun load-stream (name params callback-fn cred)
+(defun load-stream (name params callback-fn cred raw-json)
   (multiple-value-bind (content code return-headers url-reply stream-ret need-close reason-string)
       (drakma:http-request (make-mastodon-url name cred)
                            :want-stream t
@@ -268,21 +268,24 @@
                                (setq event-type content))
                               ((and (not (null event-type))
                                     (equal tag "data"))
-                               (funcall callback-fn event-type (parse-json-object 'status (yason:parse content)))
+                               (funcall callback-fn event-type (let ((json (yason:parse content)))
+                                                                 (if raw-json
+                                                                     json
+                                                                     (parse-json-object 'status json))))
                                (setq event-type nil))
                               (t
                                (warn "Unexpected event. tag=~s, content=~s, event-type=~s" tag content event-type)))))))))
       (when need-close
         (close stream-ret)))))
 
-(defun stream-public (callback-fn &key (cred *credentials*))
-  (load-stream "api/v1/streaming/public" nil callback-fn cred))
+(defun stream-public (callback-fn &key (cred *credentials*) raw-json)
+  (load-stream "api/v1/streaming/public" nil callback-fn cred raw-json))
 
-(defun stream-user (callback-fn &key (cred *credentials*))
-  (load-stream "api/v1/streaming/user" nil callback-fn cred))
+(defun stream-user (callback-fn &key (cred *credentials*) raw-json)
+  (load-stream "api/v1/streaming/user" nil callback-fn cred raw-json))
 
-(defun stream-hashtag (hashtag callback-fn &key (cred *credentials*))
-  (load-stream "api/v1/streaming/hashtag" `(("tag" . ,hashtag)) callback-fn cred))
+(defun stream-hashtag (hashtag callback-fn &key (cred *credentials*) raw-json)
+  (load-stream "api/v1/streaming/hashtag" `(("tag" . ,hashtag)) callback-fn cred raw-json))
 
 (defun search-from-site (url query &key resolve)
   (multiple-value-bind (content code return-headers url-reply stream need-close reason-string)
