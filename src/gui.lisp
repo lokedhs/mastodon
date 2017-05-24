@@ -330,6 +330,15 @@
   (let ((cred (current-cred)))
     (mastodon:follow-from-url (wrapped-user/url user) :cred cred)))
 
+(define-mastodon-frame-command (authenticate :name "Authenticate")
+    ((instance 'string)
+     (user 'string)
+     (password 'string))
+  (destructuring-bind (id secret)
+      (mastodon:request-new-application-id instance)
+    (setf (mastodon-frame/credentials clim:*application-frame*)
+          (mastodon:login instance id secret user password))))
+
 (clim:define-presentation-to-command-translator select-url
     (text-link open-url mastodon-frame)
     (obj)
