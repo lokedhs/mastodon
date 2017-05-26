@@ -5,7 +5,7 @@
 (defclass user-info-view (clim:view)
   ())
 
-(defparameter *instance-list-filename* "instances.txt")
+(defparameter *instance-list-filename* (merge-pathnames (user-homedir-pathname) #p"instances.txt"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; generic-user
@@ -93,6 +93,13 @@
 
 (defmethod button/text ((button follow-user-button))
   "Follow")
+
+(defclass remove-cached-instance-button (button)
+  ((url :initarg :url
+        :reader remove-cached-instance-button/url)))
+
+(defmethod button/text ((button remove-cached-instance-button))
+  "Remove")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Stored instances
@@ -275,24 +282,54 @@
 (defun reply-to-remote-post (orig text cred)
   (mastodon:post text :cred cred :reply-id (mastodon:status/id (replicate-remote-message orig cred))))
 
+(defun normalise-server-url (url)
+  (when (zerop (length url))
+    (error "Empty URL"))
+  (unless (cl-ppcre:scan "^https?://" url)
+    (setq url (format nil "https://~a" url)))
+  (unless (alexandria:ends-with-subseq "/" url)
+    (setq url (format nil "~a/" url)))
+  url)
+
 (define-mastodon-frame-command (add-instance :name "Add Instance")
     ((url 'string))
-  (let ((frame clim:*application-frame*))
-    (cond ((member url (mastodon-frame/instances frame) :key #'car :test #'equal)
+  (let ((frame clim:*application-frame*)
+        (normalised-url (normalise-server-url url)))
+    (cond ((member normalised-url (mastodon-frame/instances frame) :key #'car :test #'equal)
            (format (clim:find-pane-named frame 'interaction-pane) "Instance already added~%"))
           (t
            (destructuring-bind (id secret)
-               (mastodon:request-new-application-id url)
-             (push (list url id secret) (mastodon-frame/instances frame))
+               (mastodon:request-new-application-id normalised-url)
+             (push (list normalised-url id secret) (mastodon-frame/instances frame))
              (save-instances (mastodon-frame/instances frame))
              (format (clim:find-pane-named frame 'interaction-pane) "Instance created~%"))))))
 
 (define-mastodon-frame-command (list-instances :name "List Instances")
-  ()
+    ()
   (let* ((frame clim:*application-frame*)
          (stream (clim:find-pane-named frame 'interaction-pane)))
     (dolist (instance (mastodon-frame/instances frame))
-      (format stream "~a~%" (car instance)))))
+      (let ((url (car instance)))
+        (format stream "~a " url)
+        (present-to-stream (make-instance 'remove-cached-instance-button :url url) stream)
+        (format stream "~%")))))
+
+(clim:define-presentation-to-command-translator remove-cached-instance
+    (remove-cached-instance-button remove-instance mastodon-frame)
+    (obj)
+  (list (remove-cached-instance-button/url obj)))
+
+(define-mastodon-frame-command (remove-instance :name "Remove Instance")
+    ((url 'string))
+  (let ((frame clim:*application-frame*)
+        (normalised-url (normalise-server-url url)))
+    (cond ((not (member normalised-url (mastodon-frame/instances frame) :key #'car :test #'equal))
+           (format (clim:find-pane-named frame 'interaction-pane) "Instance not found~%"))
+          (t
+           (setf (mastodon-frame/instances frame)
+                 (remove normalised-url (mastodon-frame/instances frame) :key #'car :test #'equal))
+           (save-instances (mastodon-frame/instances frame))
+           (format (clim:find-pane-named frame 'interaction-pane) "Instance removed~%")))))
 
 (define-mastodon-frame-command (home-timeline :name "Home")
     ()
