@@ -5,6 +5,8 @@
 (defclass user-info-view (clim:view)
   ())
 
+(defparameter *instance-list-filename* "instances.txt")
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; generic-user
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -91,6 +93,25 @@
 
 (defmethod button/text ((button follow-user-button))
   "Follow")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Stored instances
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun load-instances ()
+  (let ((*read-eval* nil))
+    (let ((in (open *instance-list-filename* :if-does-not-exist nil)))
+      (when in
+        (unwind-protect
+             (let ((instances (read in)))
+               (unless (listp instances)
+                 (error "Unexpected format of instance list"))
+               instances)
+          (close in))))))
+
+(defun save-instances (instances)
+  (with-open-file (out *instance-list-filename* :direction :output :if-exists :supersede)
+    (write instances :stream out)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; User display
@@ -192,7 +213,10 @@
   (format stream "Post message~%"))
 
 (clim:define-application-frame mastodon-frame ()
-  ((credentials    :initarg :credentials
+  ((instances      :type list
+                   :initform nil
+                   :accessor mastodon-frame/instances)
+   (credentials    :initarg :credentials
                    :accessor mastodon-frame/credentials)
    (displayed-user :initform nil
                    :accessor mastodon-frame/displayed-user)
@@ -221,7 +245,10 @@
                      interaction-pane)))
 
 (defmethod initialize-instance :after ((obj mastodon-frame) &key)
-  (setf (slot-value obj 'image-cache) (make-instance 'image-cache)))
+  (setf (slot-value obj 'image-cache) (make-instance 'image-cache))
+  (let ((instances (load-instances)))
+    (when instances
+      (setf (mastodon-frame/instances obj) instances))))
 
 (defun current-cred (&optional (frame clim:*application-frame*))
   (mastodon-frame/credentials frame))
@@ -247,6 +274,25 @@
 
 (defun reply-to-remote-post (orig text cred)
   (mastodon:post text :cred cred :reply-id (mastodon:status/id (replicate-remote-message orig cred))))
+
+(define-mastodon-frame-command (add-instance :name "Add Instance")
+    ((url 'string))
+  (let ((frame clim:*application-frame*))
+    (cond ((member url (mastodon-frame/instances frame) :key #'car :test #'equal)
+           (format (clim:find-pane-named frame 'interaction-pane) "Instance already added~%"))
+          (t
+           (destructuring-bind (id secret)
+               (mastodon:request-new-application-id url)
+             (push (list url id secret) (mastodon-frame/instances frame))
+             (save-instances (mastodon-frame/instances frame))
+             (format (clim:find-pane-named frame 'interaction-pane) "Instance created~%"))))))
+
+(define-mastodon-frame-command (list-instances :name "List Instances")
+  ()
+  (let* ((frame clim:*application-frame*)
+         (stream (clim:find-pane-named frame 'interaction-pane)))
+    (dolist (instance (mastodon-frame/instances frame))
+      (format stream "~a~%" (car instance)))))
 
 (define-mastodon-frame-command (home-timeline :name "Home")
     ()
