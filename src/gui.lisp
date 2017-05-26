@@ -6,6 +6,7 @@
   ())
 
 (defparameter *instance-list-filename* (merge-pathnames (user-homedir-pathname) #p"instances.txt"))
+(defparameter *creds-filename* (merge-pathnames (user-homedir-pathname) #p"credentials.txt"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; generic-user
@@ -95,8 +96,8 @@
   "Follow")
 
 (defclass remove-cached-instance-button (button)
-  ((url :initarg :url
-        :reader remove-cached-instance-button/url)))
+  ((instance :initarg :instance
+             :reader remove-cached-instance-button/instance)))
 
 (defmethod button/text ((button remove-cached-instance-button))
   "Remove")
@@ -104,6 +105,16 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Stored instances
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defclass stored-instance ()
+  ((name   :initarg :name
+           :reader stored-instance/name)
+   (url    :initarg :url
+           :reader stored-instance/url)
+   (id     :initarg :id
+           :reader stored-instance/id)
+   (secret :initarg :secret
+           :reader stored-instance/secret)))
 
 (defun load-instances ()
   (let ((*read-eval* nil))
@@ -113,12 +124,46 @@
              (let ((instances (read in)))
                (unless (listp instances)
                  (error "Unexpected format of instance list"))
-               instances)
+               (mapcar (lambda (v)
+                         (destructuring-bind (name url id secret)
+                             v
+                           (make-instance 'stored-instance :name name :url url :id id :secret secret)))
+                       instances))
           (close in))))))
 
 (defun save-instances (instances)
   (with-open-file (out *instance-list-filename* :direction :output :if-exists :supersede)
-    (write instances :stream out)))
+    (write (mapcar (lambda (v)
+                     (list (stored-instance/name v)
+                           (stored-instance/url v)
+                           (stored-instance/id v)
+                           (stored-instance/secret v)))
+                   instances)
+           :stream out)))
+
+(clim:define-presentation-method clim:present (obj (type stored-instance) stream (view t) &key)
+  (format stream "~a" (stored-instance/name obj)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Saved credentials
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun load-creds ()
+  (let ((*read-eval* nil))
+    (let ((in (open *creds-filename* :if-does-not-exist nil)))
+      (when in
+        (unwind-protect
+             (let ((content (read in)))
+               (destructuring-bind (url token)
+                   content
+                 (make-instance 'mastodon:credentials :url url :token token)))
+          (close in))))))
+
+(defun save-creds (cred)
+  (with-open-file (out *creds-filename* :direction :output :if-exists :supersede)
+    (write (list (mastodon:credentials/url cred)
+                 (mastodon:credentials/token cred))
+           :stream out)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; User display
@@ -215,10 +260,6 @@
   (present-activity-list (mastodon-frame/messages frame) stream)
   (clim:scroll-extent stream 0 0))
 
-(defun display-post-message (frame stream)
-  (declare (ignore frame))
-  (format stream "Post message~%"))
-
 (clim:define-application-frame mastodon-frame ()
   ((instances      :type list
                    :initform nil
@@ -240,14 +281,11 @@
                      :default-view (make-instance 'user-info-view)
                      :display-function 'display-user-info
                      :display-time t)
-          (post-message-form :application
-                             :display-function 'display-post-message)
           (bottom-adjuster (clim:make-pane 'clim-extensions:box-adjuster-gadget))
           (interaction-pane :interactor))
   (:layouts (default (clim:horizontally ()
-                       (1/3 user-info)
-                       (1/3 activity-list)
-                       (1/3 post-message-form))
+                       (1/2 user-info)
+                       (1/2 activity-list))
                      bottom-adjuster
                      interaction-pane)))
 
@@ -295,12 +333,12 @@
     ((url 'string))
   (let ((frame clim:*application-frame*)
         (normalised-url (normalise-server-url url)))
-    (cond ((member normalised-url (mastodon-frame/instances frame) :key #'car :test #'equal)
+    (cond ((member normalised-url (mastodon-frame/instances frame) :key #'stored-instance/url :test #'equal)
            (format (clim:find-pane-named frame 'interaction-pane) "Instance already added~%"))
           (t
            (destructuring-bind (id secret)
                (mastodon:request-new-application-id normalised-url)
-             (push (list normalised-url id secret) (mastodon-frame/instances frame))
+             (push (make-instance 'stored-instance :name normalised-url :url normalised-url :id id :secret secret) (mastodon-frame/instances frame))
              (save-instances (mastodon-frame/instances frame))
              (format (clim:find-pane-named frame 'interaction-pane) "Instance created~%"))))))
 
@@ -309,10 +347,10 @@
   (let* ((frame clim:*application-frame*)
          (stream (clim:find-pane-named frame 'interaction-pane)))
     (dolist (instance (mastodon-frame/instances frame))
-      (let ((url (car instance)))
-        (format stream "~a " url)
-        (present-to-stream (make-instance 'remove-cached-instance-button :url url) stream)
-        (format stream "~%")))))
+      (present-to-stream instance stream)
+      (format stream " ")
+      (present-to-stream (make-instance 'remove-cached-instance-button :instance instance) stream)
+      (format stream "~%"))))
 
 (clim:define-presentation-to-command-translator remove-cached-instance
     (remove-cached-instance-button remove-instance mastodon-frame)
@@ -320,7 +358,7 @@
   (list (remove-cached-instance-button/url obj)))
 
 (define-mastodon-frame-command (remove-instance :name "Remove Instance")
-    ((url 'string))
+    ((url 'stored-instance))
   (let ((frame clim:*application-frame*)
         (normalised-url (normalise-server-url url)))
     (cond ((not (member normalised-url (mastodon-frame/instances frame) :key #'car :test #'equal))
@@ -371,7 +409,10 @@
 
 (define-mastodon-frame-command (post-new :name "Post")
     ((text 'string))
-  (mastodon:post text))
+  (let ((trimmed (string-trim '(#\Space #\Tab) text)))
+    (if (zerop (length trimmed))
+        (error "Empty message")
+        (mastodon:post trimmed :cred (current-cred)))))
 
 (define-mastodon-frame-command (reply :name "Reply")
     ((in-reply-to 'generic-status)
@@ -414,13 +455,12 @@
     (mastodon:follow-from-url (wrapped-user/url user) :cred cred)))
 
 (define-mastodon-frame-command (authenticate :name "Authenticate")
-    ((instance 'string)
+    ((instance 'stored-instance)
      (user 'string)
      (password 'string))
-  (destructuring-bind (id secret)
-      (mastodon:request-new-application-id instance)
-    (setf (mastodon-frame/credentials clim:*application-frame*)
-          (mastodon:login instance id secret user password))))
+  (let ((cred (mastodon:login (stored-instance/url instance) (stored-instance/id instance) (stored-instance/secret instance) user password)))
+    (setf (mastodon-frame/credentials clim:*application-frame*) cred)
+    (save-creds cred)))
 
 (clim:define-presentation-to-command-translator select-url
     (text-link open-url mastodon-frame)
@@ -464,11 +504,11 @@
 
 (defvar *frame* nil)
 
-(defun mastodon-gui (&optional creds)
+(defun mastodon-gui ()
   (unless lparallel:*kernel*
     (setf lparallel:*kernel* (lparallel:make-kernel 10)))
   (let ((frame (clim:make-application-frame 'mastodon-frame
-                                            :credentials (or creds mastodon:*credentials*)
+                                            :credentials (or (load-creds) mastodon:*credentials*)
                                             :width 1000 :height 700
                                             :left 10 :top 10)))
     (setq *frame* frame)
