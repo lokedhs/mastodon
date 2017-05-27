@@ -273,6 +273,7 @@
                    :accessor mastodon-frame/messages)
    (image-cache    :type image-cache
                    :reader mastodon-frame/image-cache))
+  (:menu-bar mastodon-frame-command-table)
   (:panes (activity-list :application
                          :default-view (make-instance 'activity-list-view)
                          :display-function 'display-activity-list
@@ -329,6 +330,12 @@
     (setq url (format nil "~a/" url)))
   url)
 
+(clim:make-command-table 'mastodon-frame-command-table
+                         :errorp nil
+                         :menu '(("Home" :command home-timeline)
+                                 ("Public" :command public-timeline)
+                                 ("Local" :command public-local)))
+
 (define-mastodon-frame-command (add-instance :name "Add Instance")
     ((url 'string))
   (let ((frame clim:*application-frame*)
@@ -355,7 +362,7 @@
 (clim:define-presentation-to-command-translator remove-cached-instance
     (remove-cached-instance-button remove-instance mastodon-frame)
     (obj)
-  (list (remove-cached-instance-button/url obj)))
+  (list (remove-cached-instance-button/instance obj)))
 
 (define-mastodon-frame-command (remove-instance :name "Remove Instance")
     ((url 'stored-instance))
@@ -388,7 +395,7 @@
          (cred (mastodon-frame/credentials frame)))
     (setf (mastodon-frame/displayed-user frame)
           (cond ((mastodon:user-local-p url :cred cred)
-                 (let ((user (mastodon:account-from-url url)))
+                 (let ((user (mastodon:account-from-url url :cred cred)))
                    (make-instance 'displayed-user :user user)))
                 (t
                  (destructuring-bind (user feed)
