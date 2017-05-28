@@ -38,7 +38,14 @@
    #:status/reblogged
    #:stream-public
    #:stream-user
-   #:stream-hashtag))
+   #:stream-hashtag
+   #:load-notifications
+   #:notification
+   #:notification/id
+   #:notification/type
+   #:notification/created-at
+   #:notification/account
+   #:notification/status))
 
 (defpackage :mastodon-gui
   (:use :cl)

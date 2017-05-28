@@ -151,6 +151,28 @@
   (print-unreadable-object (obj stream :type t)
     (format stream "ID ~s" (status/id obj))))
 
+(defclass notification ()
+  ((id         :json-field "id"
+               :reader notification/id)
+   (type       :json-field "type"
+               :reader notification/type)
+   (created-at :json-field "created_at"
+               :reader notification/created-at)
+   (account    :json-field "account"
+               :json-type (:map account)
+               :reader notification/account)
+   (status     :json-field "status"
+               :json-type (:map status)
+               :reader notification/status))
+  (:metaclass json-entity-class))
+
+(defmethod print-object ((obj notification) stream)
+  (print-unreadable-object (obj stream :type t)
+    (format stream "ID ~s TYPE ~s CREATED-AT ~s"
+            (notification/id obj)
+            (notification/type obj)
+            (notification/created-at obj))))
+
 (defun load-account (user-id &key (cred *credentials*))
   (assert-format "^[0-9]+$" user-id)
   (parse-json-object 'account (authenticated-http-request (format nil "api/v1/accounts/~a" user-id) cred)))
@@ -304,3 +326,13 @@
                (:statuses . ,(mapcar (lambda (v) (parse-json-object 'status v)) (gethash "statuses" json))))))
       (when need-close
         (close stream)))))
+
+(defun load-notifications (&key (cred *credentials*) max-id since-id limit)
+  (check-type max-id (or null integer))
+  (check-type since-id (or null string))
+  (check-type limit (or null integer))
+  (let ((result (authenticated-http-request "api/v1/notifications" cred
+                                            :parameters `(,@(if max-id `(("max_id" . ,(princ-to-string max-id))))
+                                                          ,@(if since-id `(("since_id" . ,(princ-to-string since-id))))
+                                                          ,@(if limit `(("limit" . ,(princ-to-string limit))))))))
+    (mapcar (lambda (v) (parse-json-object 'notification v)) result)))
