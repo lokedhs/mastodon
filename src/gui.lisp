@@ -250,8 +250,9 @@
     do (clim:updating-output (stream :unique-id msg
                                      :id-test (lambda (a b)
                                                 (and (eql (type-of a) (type-of b))
-                                                     (equal (generic-status/message-id a) (generic-status/message-id b))))
-                                     :cache-value (generic-status-cache-value msg)
+                                                     (equal (generic-activity-cache-id a)
+                                                            (generic-activity-cache-id b))))
+                                     :cache-value (generic-activity-cache-value msg)
                                      :cache-test (lambda (a b)
                                                    (equal a b)))
          (present-to-stream msg stream))))
@@ -309,6 +310,30 @@
     (let ((pane (clim:find-pane-named frame 'activity-list)))
       (setf (clim:pane-needs-redisplay pane) t))))
 
+(defun load-notifications-timeline ()
+  (let ((frame clim:*application-frame*)
+        (notifications (mastodon:load-notifications :cred (current-cred))))
+    (setf (mastodon-frame/messages frame)
+          (loop
+            for msg in notifications
+            for notification-id = (mastodon:notification/id msg)
+            for user = (mastodon:notification/account msg)
+            for created-at = (mastodon:notification/created-at msg)
+            do (format t "type=~s~%" (mastodon:notification/type msg))
+            append (string-case:string-case ((mastodon:notification/type msg))
+                     ("mention" (list (make-instance 'displayed-mention
+                                                     :id notification-id
+                                                     :status (make-instance 'displayed-status
+                                                                            :status (mastodon:notification/status msg)))))
+                     ("reblog" (list (make-instance 'displayed-reblog
+                                                    :id notification-id
+                                                    :user user
+                                                    :status (make-instance 'displayed-status
+                                                                            :status (mastodon:notification/status msg)))))
+                     (t nil))))
+    (let ((pane (clim:find-pane-named frame 'activity-list)))
+      (setf (clim:pane-needs-redisplay pane) t))))
+
 (defun replicate-remote-message (status cred)
   (check-type status remote-status)
   (let* ((result (mastodon:search-from-site (mastodon:credentials/url cred)
@@ -334,7 +359,8 @@
                          :errorp nil
                          :menu '(("Home" :command home-timeline)
                                  ("Public" :command public-timeline)
-                                 ("Local" :command public-local)))
+                                 ("Local" :command public-local)
+                                 ("Notifiations" :command notifications-timeline)))
 
 (define-mastodon-frame-command (add-instance :name "Add Instance")
     ((url 'string))
@@ -375,6 +401,10 @@
                  (remove normalised-url (mastodon-frame/instances frame) :key #'car :test #'equal))
            (save-instances (mastodon-frame/instances frame))
            (format (clim:find-pane-named frame 'interaction-pane) "Instance removed~%")))))
+
+(define-mastodon-frame-command (notifications-timeline :name "Notifications")
+    ()
+  (load-notifications-timeline))
 
 (define-mastodon-frame-command (home-timeline :name "Home")
     ()
@@ -482,7 +512,7 @@
 (clim:define-presentation-to-command-translator select-mention-link
     (mention-link load-user mastodon-frame)
     (obj)
-  (list (wrapped-user/url obj)))
+  (list obj))
 
 (clim:define-presentation-to-command-translator select-reblog
     (reblog-button reblog-post mastodon-frame)

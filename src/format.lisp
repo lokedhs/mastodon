@@ -9,7 +9,16 @@
 ;;;  generic-status
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defclass generic-status ()
+(defclass generic-activity ()
+  ())
+
+(defgeneric generic-activity-cache-value (msg)
+  (:documentation "Returns the cache value for a given message"))
+
+(defgeneric generic-activity-cache-id (msg)
+  (:documentation "Returns the cache id for a given message"))
+
+(defclass generic-status (generic-activity)
   ((image           :initarg :image
                     :initform nil
                     :accessor generic-status/image)
@@ -25,9 +34,6 @@
 (defgeneric generic-status/image-url (status))
 (defgeneric generic-status/reblogged-p (status))
 (defgeneric generic-status/favourited-p (status))
-
-(defgeneric generic-status-cache-value (msg)
-  (:documentation "Returns the cache value for a given message"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;  displayed-status
@@ -68,7 +74,10 @@
 (defmethod generic-status/favourited-p ((obj displayed-status))
   (mastodon:status/favourited (displayed-status/status obj)))
 
-(defmethod generic-status-cache-value ((obj displayed-status))
+(defmethod generic-activity-cache-id ((obj displayed-status))
+  (mastodon:status/url (displayed-status/status obj)))
+
+(defmethod generic-activity-cache-value ((obj displayed-status))
   (mastodon:status/url (displayed-status/status obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -114,7 +123,10 @@
 (defmethod generic-status/favourited-p ((obj remote-status))
   nil)
 
-(defmethod generic-status-cache-value ((obj remote-status))
+(defmethod generic-activity-cache-id ((obj remote-status))
+  (status-net:post/id (remote-status/post obj)))
+
+(defmethod generic-activity-cache-value ((obj remote-status))
   (status-net:post/id (remote-status/post obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -244,7 +256,7 @@
            (setf hcard t))
          (when (member "mention" style :test #'equal)
            (setf mention t))
-         (when (and hcard mention)
+         (when hcard #+nil(and hcard mention)
            (return 'mention-link)))
     finally (return 'text-link-html)))
 
@@ -345,3 +357,44 @@
 
 (clim:define-presentation-method clim:present (obj (type generic-status) stream (view clim:textual-view) &key)
   (format stream "Post: ~a" (generic-status/message-id obj)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Notification activities
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defclass notification-activity (generic-activity)
+  ((id :initarg :id
+       :reader notification-activity/id)))
+
+(defmethod generic-activity-cache-id ((obj notification-activity))
+  (princ-to-string (notification-activity/id obj)))
+
+(defmethod generic-activity-cache-value ((obj notification-activity))
+  (princ-to-string (notification-activity/id obj)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; displayed-mention
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defclass displayed-mention (notification-activity)
+  ((status :initarg :status
+           :reader displayed-mention/status)))
+
+(clim:define-presentation-method clim:present (obj (type displayed-mention) stream (view t) &key)
+  (format stream "Mentioned~%~%")
+  (present-status stream (displayed-mention/status obj)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; displayed-reblog
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defclass displayed-reblog (notification-activity)
+  ((user   :initarg :user
+           :reader displayed-reblog/user)
+   (status :initarg :status
+           :reader displayed-reblog/status)))
+
+(clim:define-presentation-method clim:present (obj (type displayed-reblog) stream (view t) &key)
+  (present-to-stream (make-instance 'user-link :account (displayed-reblog/user obj)) stream)
+  (format stream " boosted your status~%~%")
+  (present-status stream (displayed-reblog/status obj)))
