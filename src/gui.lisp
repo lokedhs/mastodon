@@ -9,6 +9,28 @@
 (defparameter *creds-filename* (merge-pathnames (user-homedir-pathname) #p"credentials.txt"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Utils
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun current-cred (&optional (frame clim:*application-frame*))
+  (mastodon-frame/credentials frame))
+
+(defun normalise-server-url (url)
+  (when (zerop (length url))
+    (error "Empty URL"))
+  (unless (cl-ppcre:scan "^https?://" url)
+    (setq url (format nil "https://~a" url)))
+  (unless (alexandria:ends-with-subseq "/" url)
+    (setq url (format nil "~a/" url)))
+  url)
+
+(defun ensure-post-id (msg cred)
+  (let ((status (etypecase msg
+                  (displayed-status (displayed-status/status msg))
+                  (remote-status (replicate-remote-message (remote-status/post msg) cred)))))
+    (mastodon:status/id status)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; generic-user
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -298,9 +320,6 @@
     (when instances
       (setf (mastodon-frame/instances obj) instances))))
 
-(defun current-cred (&optional (frame clim:*application-frame*))
-  (mastodon-frame/credentials frame))
-
 (defun load-timeline (category local-p)
   (let ((frame clim:*application-frame*)
         (timeline (mastodon:timeline category :cred (current-cred) :local local-p)))
@@ -346,21 +365,16 @@
 (defun reply-to-remote-post (orig text cred)
   (mastodon:post text :cred cred :reply-id (mastodon:status/id (replicate-remote-message orig cred))))
 
-(defun normalise-server-url (url)
-  (when (zerop (length url))
-    (error "Empty URL"))
-  (unless (cl-ppcre:scan "^https?://" url)
-    (setq url (format nil "https://~a" url)))
-  (unless (alexandria:ends-with-subseq "/" url)
-    (setq url (format nil "~a/" url)))
-  url)
-
 (clim:make-command-table 'mastodon-frame-command-table
                          :errorp nil
                          :menu '(("Home" :command home-timeline)
                                  ("Public" :command public-timeline)
                                  ("Local" :command public-local)
                                  ("Notifiations" :command notifications-timeline)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Commands
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define-mastodon-frame-command (add-instance :name "Add Instance")
     ((url 'string))
@@ -384,11 +398,6 @@
       (format stream " ")
       (present-to-stream (make-instance 'remove-cached-instance-button :instance instance) stream)
       (format stream "~%"))))
-
-(clim:define-presentation-to-command-translator remove-cached-instance
-    (remove-cached-instance-button remove-instance mastodon-frame)
-    (obj)
-  (list (remove-cached-instance-button/instance obj)))
 
 (define-mastodon-frame-command (remove-instance :name "Remove Instance")
     ((url 'stored-instance))
@@ -460,12 +469,6 @@
                                      :cred (current-cred)))
     (remote-status (reply-to-remote-post in-reply-to text (current-cred)))))
 
-(defun ensure-post-id (msg cred)
-  (let ((status (etypecase msg
-                  (displayed-status (displayed-status/status msg))
-                  (remote-status (replicate-remote-message (remote-status/post msg) cred)))))
-    (mastodon:status/id status)))
-
 (define-mastodon-frame-command (reblog-post :name "Reblog")
     ((message 'generic-status))
   (let ((cred (current-cred)))
@@ -498,6 +501,10 @@
   (let ((cred (mastodon:login (stored-instance/url instance) (stored-instance/id instance) (stored-instance/secret instance) user password)))
     (setf (mastodon-frame/credentials clim:*application-frame*) cred)
     (save-creds cred)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Command translators
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (clim:define-presentation-to-command-translator select-url
     (text-link open-url mastodon-frame)
@@ -538,6 +545,15 @@
     (follow-user-button follow-account mastodon-frame)
     (obj)
   (list (follow-user-button/user obj)))
+
+(clim:define-presentation-to-command-translator remove-cached-instance
+    (remove-cached-instance-button remove-instance mastodon-frame)
+    (obj)
+  (list (remove-cached-instance-button/instance obj)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Main function
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defvar *frame* nil)
 
