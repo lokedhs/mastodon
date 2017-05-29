@@ -278,7 +278,8 @@
   (:panes (activity-list :application
                          :default-view (make-instance 'activity-list-view)
                          :display-function 'display-activity-list
-                         :display-time t)
+                         :display-time t
+                         :incremental-redisplay t)
           (user-info :application
                      :default-view (make-instance 'user-info-view)
                      :display-function 'display-user-info
@@ -319,7 +320,6 @@
             for notification-id = (mastodon:notification/id msg)
             for user = (mastodon:notification/account msg)
             for created-at = (mastodon:notification/created-at msg)
-            do (format t "type=~s~%" (mastodon:notification/type msg))
             append (string-case:string-case ((mastodon:notification/type msg))
                      ("mention" (list (make-instance 'displayed-mention
                                                      :id notification-id

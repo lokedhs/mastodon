@@ -78,7 +78,8 @@
   (mastodon:status/url (displayed-status/status obj)))
 
 (defmethod generic-activity-cache-value ((obj displayed-status))
-  (mastodon:status/url (displayed-status/status obj)))
+  (list (mastodon:status/url (displayed-status/status obj))
+        (if (generic-status/image obj) :image-loaded :no-image)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;  remote-status
@@ -326,7 +327,9 @@
                                        (if immediate-p
                                            (update-entry)
                                            (with-call-in-event-handler frame
-                                             (update-entry))))))))))
+                                             (update-entry)
+                                             (setf (clim:pane-needs-redisplay stream) t)
+                                             (clim:redisplay-frame-pane (clim:pane-frame stream) stream))))))))))
       ;;
       (let ((image (generic-status/image status)))
         (when image
