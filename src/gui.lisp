@@ -307,12 +307,14 @@
                      :display-function 'display-user-info
                      :display-time t)
           (bottom-adjuster (clim:make-pane 'clim-extensions:box-adjuster-gadget))
-          (interaction-pane :interactor))
+          (interaction-pane :interactor)
+          (pointer-doc :pointer-documentation))
   (:layouts (default (clim:horizontally ()
                        (1/2 user-info)
                        (1/2 activity-list))
                      bottom-adjuster
-                     interaction-pane)))
+                     interaction-pane
+                     pointer-doc)))
 
 (defmethod initialize-instance :after ((obj mastodon-frame) &key)
   (setf (slot-value obj 'image-cache) (make-instance 'image-cache))
