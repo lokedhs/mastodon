@@ -168,12 +168,12 @@
 (defmethod button/text ((button unfavourite-button))
   "Remove Favourite")
 
-(defclass wrapped-user ()
-  ())
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; wrapped-user
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defclass wrapped-user ()
+  ())
 
 (defgeneric wrapped-user/url (wrapped-user)
   (:documentation "Returns the URL for the given user"))
@@ -218,6 +218,9 @@
   #+sbcl (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
   (clim:with-drawing-options (stream :ink *link-colour*)
     (funcall content-callback)))
+
+(clim:define-presentation-method clim:present (obj (type wrapped-user) stream view &key)
+  (format stream "~a" (wrapped-user/url obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Rendering messages
