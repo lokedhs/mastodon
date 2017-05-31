@@ -454,11 +454,12 @@
                                   (uiop/run-program:run-program (list "xdg-open" url)))))
 
 (define-mastodon-frame-command (post-new :name "Post")
-    ((text 'string))
-  (let ((trimmed (string-trim '(#\Space #\Tab) text)))
-    (if (zerop (length trimmed))
-        (error "Empty message")
-        (mastodon:post trimmed :cred (current-cred)))))
+    ()
+  (let ((text (accepting-post)))
+    (let ((trimmed (string-trim '(#\Space #\Tab) text)))
+      (if (zerop (length trimmed))
+          (error "Empty message")
+          (mastodon:post trimmed :cred (current-cred))))))
 
 (define-mastodon-frame-command (reply :name "Reply")
     ((in-reply-to 'generic-status)

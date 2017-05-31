@@ -26,5 +26,6 @@
                              (:file "format")
                              (:file "gui-misc")
                              (:file "image-cache")
+                             (:file "post")
                              (:file "gui")))))
 
