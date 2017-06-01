@@ -505,6 +505,21 @@
     (setf (mastodon-frame/credentials clim:*application-frame*) cred)
     (save-creds cred)))
 
+(define-mastodon-frame-command (load-status :name "Load Status")
+    ((message 'generic-status))
+  (let* ((frame clim:*application-frame*)
+         (remote-message (status-net:load-post (generic-activity/url message)))
+         (thread (status-net:load-thread (second remote-message) :limit 20))
+         (messages (reverse (cons remote-message thread))))
+    (setf (mastodon-frame/messages frame)
+          (mapcar (lambda (v)
+                    (destructuring-bind (user message)
+                        v
+                      (make-instance 'remote-status :user user :post message)))
+                  messages))
+    (let ((pane (clim:find-pane-named frame 'activity-list)))
+      (setf (clim:pane-needs-redisplay pane) t))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Command translators
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -553,6 +568,11 @@
     (remove-cached-instance-button remove-instance mastodon-frame)
     (obj)
   (list (remove-cached-instance-button/instance obj)))
+
+(clim:define-presentation-to-command-translator select-generic-activity
+    (generic-activity load-status mastodon-frame)
+    (obj)
+  (list obj))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Main function

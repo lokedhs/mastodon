@@ -12,6 +12,9 @@
 (defclass generic-activity ()
   ())
 
+(defgeneric generic-activity/message-id (status))
+(defgeneric generic-activity/url (status))
+
 (defgeneric generic-activity-cache-value (msg)
   (:documentation "Returns the cache value for a given message"))
 
@@ -30,7 +33,6 @@
 (defgeneric generic-status/user-id (status))
 (defgeneric generic-status/timestamp (status))
 (defgeneric generic-status/content (status))
-(defgeneric generic-status/message-id (status))
 (defgeneric generic-status/image-url (status))
 (defgeneric generic-status/reblogged-p (status))
 (defgeneric generic-status/favourited-p (status))
@@ -62,7 +64,7 @@
 (defmethod generic-status/content ((obj displayed-status))
   (mastodon:status/content (displayed-status/status obj)))
 
-(defmethod generic-status/message-id ((obj displayed-status))
+(defmethod generic-activity/message-id ((obj displayed-status))
   (mastodon:status/url (displayed-status/status obj)))
 
 (defmethod generic-status/image-url ((obj displayed-status))
@@ -73,6 +75,9 @@
 
 (defmethod generic-status/favourited-p ((obj displayed-status))
   (mastodon:status/favourited (displayed-status/status obj)))
+
+(defmethod generic-activity/url ((obj displayed-status))
+  (mastodon:status/url (displayed-status/status obj)))
 
 (defmethod generic-activity-cache-id ((obj displayed-status))
   (mastodon:status/url (displayed-status/status obj)))
@@ -109,7 +114,7 @@
 (defmethod generic-status/content ((obj remote-status))
   (status-net:post/content-html (remote-status/post obj)))
 
-(defmethod generic-status/message-id ((obj remote-status))
+(defmethod generic-activity/message-id ((obj remote-status))
   (status-net:post/id (remote-status/post obj)))
 
 (defmethod generic-status/image-url ((obj remote-status))
@@ -120,6 +125,9 @@
   ;; replication of the message first. This is probably a bit
   ;; overkill, so we'll just return false here.
   nil)
+
+(defmethod generic-activity/url ((obj remote-status))
+  (status-net:post/alternate-url (remote-status/post obj)))
 
 (defmethod generic-status/favourited-p ((obj remote-status))
   nil)
@@ -314,7 +322,7 @@
         (user-id (generic-status/user-id status))
         (timestamp (generic-status/timestamp status))
         (content (generic-status/content status))
-        (message-id (generic-status/message-id status)))
+        (message-id (generic-activity/message-id status)))
     ;;
     (when (generic-status/include-image-p status)
       ;; Check if the image needs to be loaded
@@ -362,7 +370,7 @@
   (present-status stream obj))
 
 (clim:define-presentation-method clim:present (obj (type generic-status) stream (view clim:textual-view) &key)
-  (format stream "Post: ~a" (generic-status/message-id obj)))
+  (format stream "Post: ~a" (generic-activity/message-id obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Notification activities
@@ -385,6 +393,12 @@
 (defclass displayed-mention (notification-activity)
   ((status :initarg :status
            :reader displayed-mention/status)))
+
+(defmethod generic-activity/message-id ((obj displayed-mention))
+  (mastodon:status/id (displayed-status/status (displayed-mention/status obj))))
+
+(defmethod generic-activity/url ((obj displayed-mention))
+  (mastodon:status/url (displayed-status/status (displayed-mention/status obj))))
 
 (clim:define-presentation-method clim:present (obj (type displayed-mention) stream (view t) &key)
   (format stream "Mentioned~%~%")
