@@ -1,0 +1,26 @@
+* Common Lisp Mastodon client
+
+This project implements two things should eventually be split into two
+separate projects: A client API for [[https://mastodon.social/][Mastodon]], and a user interface
+based on [[http://www.cliki.net/CLIM][CLIM]].
+
+I'm currently using the CLIM client to learn how it works, as well as
+a testbed for the API part.
+
+** How to connect to a server using the CLIM client
+
+Currently the client is not ready for real use, but if anyone is
+interested to try it, this is how you connect to an instance:
+
+  1. Add the instance to the client using the =Add Instance= command
+  2. List the instances using the =List Instances= command
+  3. Type the =Authenticate= command. This will display 3 input fields
+  4. In the first, enter the instance by clicking on the name that was
+     displayed when listing the instances. Typing the name is not
+     possible since there is no input translator from a string to an
+     instance.
+  5. Enter the username in the second field.
+  6. Enter the password in the third field.
+
+At this point, the other commands should work properly.
+
