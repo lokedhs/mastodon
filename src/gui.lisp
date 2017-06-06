@@ -206,7 +206,9 @@
       do (progn
            (setq found avatar)
            (setq found-width width))
-    finally (return (status-net:avatar/url found))))
+    finally (return (if found
+                        (status-net:avatar/url found)
+                        nil))))
 
 (defun display-user-info (frame stream)
   (alexandria:when-let ((user (mastodon-frame/displayed-user frame)))
