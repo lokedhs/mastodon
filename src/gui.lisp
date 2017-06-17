@@ -237,7 +237,7 @@
           (format stream "~%~%")
           (if (eq note-type :html)
               (present-html-string note stream)
-              (present-multiline-with-wordwrap note stream))))
+              (present-multiline-with-wordwrap stream note))))
       (format stream "~%~%")
       (present-to-stream (make-instance 'text-link-string :content url :href url) stream)
       (format stream "~%~%")
@@ -303,7 +303,9 @@
                          :default-view (make-instance 'activity-list-view)
                          :display-function 'display-activity-list
                          :display-time t
-                         :incremental-redisplay t)
+                         :incremental-redisplay t
+                         :width :compute
+                         :height :compute)
           (user-info :application
                      :default-view (make-instance 'user-info-view)
                      :display-function 'display-user-info
