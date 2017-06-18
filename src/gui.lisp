@@ -468,13 +468,13 @@
           (mastodon:post trimmed :cred (current-cred))))))
 
 (define-mastodon-frame-command (reply :name "Reply")
-    ((in-reply-to 'generic-status)
-     (text 'string))
-  (etypecase in-reply-to
-    (displayed-status (mastodon:post text
-                                     :reply-id (mastodon:status/id (displayed-status/status in-reply-to))
-                                     :cred (current-cred)))
-    (remote-status (reply-to-remote-post in-reply-to text (current-cred)))))
+    ((in-reply-to 'generic-status))
+  (let ((text (accepting-post)))
+    (etypecase in-reply-to
+      (displayed-status (mastodon:post text
+                                       :reply-id (mastodon:status/id (displayed-status/status in-reply-to))
+                                       :cred (current-cred)))
+      (remote-status (reply-to-remote-post in-reply-to text (current-cred))))))
 
 (define-mastodon-frame-command (reblog-post :name "Reblog")
     ((message 'generic-status))
@@ -577,6 +577,11 @@
     (generic-activity load-status mastodon-frame)
     (obj)
   (list obj))
+
+(clim:define-presentation-to-command-translator select-reply
+    (reply-button reply mastodon-frame)
+    (obj)
+  (list (button-message obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Main function

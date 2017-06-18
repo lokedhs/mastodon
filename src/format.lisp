@@ -321,8 +321,7 @@
   (let ((user-ptr (generic-status/user-ptr status))
         (user-id (generic-status/user-id status))
         (timestamp (generic-status/timestamp status))
-        (content (generic-status/content status))
-        (message-id (generic-activity/message-id status)))
+        (content (generic-status/content status)))
     ;;
     (when (generic-status/include-image-p status)
       ;; Check if the image needs to be loaded
@@ -355,7 +354,7 @@
       (format stream " - ~a - ~a~%" user-id (format-readable-date timestamp)))
     (present-html-string content stream)
     (format stream "~%~%  ")
-    (present-to-stream (make-instance 'reply-button :msg message-id) stream)
+    (present-to-stream (make-instance 'reply-button :msg status) stream)
     (present-to-stream (if (generic-status/reblogged-p status)
                            (make-instance 'unreblog-button :msg status)
                            (make-instance 'reblog-button :msg status))
