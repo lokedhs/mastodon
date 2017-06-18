@@ -30,6 +30,14 @@
                   (remote-status (replicate-remote-message (remote-status/post msg) cred)))))
     (mastodon:status/id status)))
 
+;;; Redisplay on resize
+(defmethod clim:handle-event :after ((sheet clim:mirrored-sheet-mixin)
+	                             (event clim:window-configuration-event))
+  (format *debug-io* "handle-event: ~s, event: ~s~%" sheet event)
+  (let ((frame clim:*application-frame*))
+    (clim:redisplay-frame-pane clim:*application-frame* (clim:find-pane-named frame 'activity-list) :force-p t)
+    (clim:redisplay-frame-pane clim:*application-frame* (clim:find-pane-named frame 'user-info) :force-p t)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; generic-user
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -314,8 +322,8 @@
           (interaction-pane :interactor)
           (pointer-doc :pointer-documentation))
   (:layouts (default (clim:horizontally ()
-                       (1/2 user-info)
-                       (1/2 activity-list))
+                       (1/2 activity-list)
+                       (1/2 user-info))
                      bottom-adjuster
                      interaction-pane
                      pointer-doc)))
