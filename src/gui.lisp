@@ -33,7 +33,6 @@
 ;;; Redisplay on resize
 (defmethod clim:handle-event :after ((sheet clim:mirrored-sheet-mixin)
 	                             (event clim:window-configuration-event))
-  (format *debug-io* "handle-event: ~s, event: ~s~%" sheet event)
   (let ((frame clim:*application-frame*))
     (clim:redisplay-frame-pane clim:*application-frame* (clim:find-pane-named frame 'activity-list) :force-p t)
     (clim:redisplay-frame-pane clim:*application-frame* (clim:find-pane-named frame 'user-info) :force-p t)))
@@ -132,19 +131,40 @@
 (defmethod button/text ((button remove-cached-instance-button))
   "Remove")
 
+(defclass choose-login-button (button)
+  ((cred :initarg :cred
+         :reader choose-login-button/cred)))
+
+(defmethod button/text ((button choose-login-button))
+  "Use")
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Stored instances
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defclass stored-instance ()
-  ((name   :initarg :name
-           :reader stored-instance/name)
-   (url    :initarg :url
-           :reader stored-instance/url)
-   (id     :initarg :id
-           :reader stored-instance/id)
-   (secret :initarg :secret
-           :reader stored-instance/secret)))
+  ((name        :initarg :name
+                :reader stored-instance/name)
+   (url         :initarg :url
+                :reader stored-instance/url)
+   (id          :initarg :id
+                :reader stored-instance/id)
+   (secret      :initarg :secret
+                :reader stored-instance/secret)
+   (saved-creds :initarg :saved-creds
+                :initform nil
+                :accessor stored-instance/saved-creds)))
+
+(defclass stored-cred ()
+  ((name :initarg :name
+         :reader stored-cred/name)
+   (cred :initarg :cred
+         :reader stored-cred/cred)))
+
+(defun parse-saved-cred (url saved-cred)
+  (destructuring-bind (name token)
+      saved-cred
+    (make-instance 'stored-cred :name name :cred (make-instance 'mastodon:credentials :url url :token token))))
 
 (defun load-instances ()
   (let ((*read-eval* nil))
@@ -155,9 +175,11 @@
                (unless (listp instances)
                  (error "Unexpected format of instance list"))
                (mapcar (lambda (v)
-                         (destructuring-bind (name url id secret)
+                         (destructuring-bind (name url id secret saved-creds)
                              v
-                           (make-instance 'stored-instance :name name :url url :id id :secret secret)))
+                           (make-instance 'stored-instance
+                                          :name name :url url :id id :secret secret
+                                          :saved-creds (mapcar (lambda (v) (parse-saved-cred url v)) saved-creds))))
                        instances))
           (close in))))))
 
@@ -167,33 +189,19 @@
                      (list (stored-instance/name v)
                            (stored-instance/url v)
                            (stored-instance/id v)
-                           (stored-instance/secret v)))
+                           (stored-instance/secret v)
+                           (mapcar (lambda (stored-cred)
+                                     (list (stored-cred/name stored-cred)
+                                           (mastodon:credentials/token (stored-cred/cred stored-cred))))
+                                   (stored-instance/saved-creds v))))
                    instances)
            :stream out)))
 
 (clim:define-presentation-method clim:present (obj (type stored-instance) stream (view t) &key)
   (format stream "~a" (stored-instance/name obj)))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Saved credentials
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(defun load-creds ()
-  (let ((*read-eval* nil))
-    (let ((in (open *creds-filename* :if-does-not-exist nil)))
-      (when in
-        (unwind-protect
-             (let ((content (read in)))
-               (destructuring-bind (url token)
-                   content
-                 (make-instance 'mastodon:credentials :url url :token token)))
-          (close in))))))
-
-(defun save-creds (cred)
-  (with-open-file (out *creds-filename* :direction :output :if-exists :supersede)
-    (write (list (mastodon:credentials/url cred)
-                 (mastodon:credentials/token cred))
-           :stream out)))
+(clim:define-presentation-method clim:present (obj (type stored-cred) stream (view t) &key)
+  (format stream "~a" (stored-cred/name obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; User display
@@ -392,16 +400,20 @@
 
 (define-mastodon-frame-command (add-instance :name "Add Instance")
     ((url 'string))
-  (let ((frame clim:*application-frame*)
-        (normalised-url (normalise-server-url url)))
-    (cond ((member normalised-url (mastodon-frame/instances frame) :key #'stored-instance/url :test #'equal)
-           (format (clim:find-pane-named frame 'interaction-pane) "Instance already added~%"))
-          (t
-           (destructuring-bind (id secret)
-               (mastodon:request-new-application-id normalised-url)
-             (push (make-instance 'stored-instance :name normalised-url :url normalised-url :id id :secret secret) (mastodon-frame/instances frame))
-             (save-instances (mastodon-frame/instances frame))
-             (format (clim:find-pane-named frame 'interaction-pane) "Instance created~%"))))))
+  (let ((frame clim:*application-frame*))
+    (handler-case
+        (let ((normalised-url (normalise-server-url url)))
+          (cond ((member normalised-url (mastodon-frame/instances frame) :key #'stored-instance/url :test #'equal)
+                 (format (clim:find-pane-named frame 'interaction-pane) "Instance already added~%"))
+                (t
+                 (destructuring-bind (id secret)
+                     (mastodon:request-new-application-id normalised-url)
+                   (push (make-instance 'stored-instance :name normalised-url :url normalised-url :id id :secret secret)
+                         (mastodon-frame/instances frame))
+                   (save-instances (mastodon-frame/instances frame))
+                   (format (clim:find-pane-named frame 'interaction-pane) "Instance created~%")))))
+      (error (condition)
+        (format (clim:find-pane-named frame 'interaction-pane) "Error: ~a~%" condition)))))
 
 (define-mastodon-frame-command (list-instances :name "List Instances")
     ()
@@ -411,17 +423,23 @@
       (present-to-stream instance stream)
       (format stream " ")
       (present-to-stream (make-instance 'remove-cached-instance-button :instance instance) stream)
-      (format stream "~%"))))
+      (format stream "~%")
+      (dolist (stored-cred (stored-instance/saved-creds instance))
+        (format stream "    ")
+        (present-to-stream stored-cred stream)
+        (format stream " ")
+        (present-to-stream (make-instance 'choose-login-button :cred stored-cred) stream)
+        (format stream "~%")))))
 
 (define-mastodon-frame-command (remove-instance :name "Remove Instance")
-    ((url 'stored-instance))
+    ((inst 'stored-instance))
   (let ((frame clim:*application-frame*)
-        (normalised-url (normalise-server-url url)))
-    (cond ((not (member normalised-url (mastodon-frame/instances frame) :key #'car :test #'equal))
+        (normalised-url (stored-instance/url inst)))
+    (cond ((not (member normalised-url (mastodon-frame/instances frame) :key #'stored-instance/url :test #'equal))
            (format (clim:find-pane-named frame 'interaction-pane) "Instance not found~%"))
           (t
            (setf (mastodon-frame/instances frame)
-                 (remove normalised-url (mastodon-frame/instances frame) :key #'car :test #'equal))
+                 (remove normalised-url (mastodon-frame/instances frame) :key #'stored-instance/url :test #'equal))
            (save-instances (mastodon-frame/instances frame))
            (format (clim:find-pane-named frame 'interaction-pane) "Instance removed~%")))))
 
@@ -513,9 +531,24 @@
     ((instance 'stored-instance)
      (user 'string)
      (password 'string))
-  (let ((cred (mastodon:login (stored-instance/url instance) (stored-instance/id instance) (stored-instance/secret instance) user password)))
-    (setf (mastodon-frame/credentials clim:*application-frame*) cred)
-    (save-creds cred)))
+  (let ((frame clim:*application-frame*))
+    (let* ((inst (find (stored-instance/url instance) (mastodon-frame/instances frame)
+                       :key #'stored-instance/url :test #'equal))
+           (cred (mastodon:login (stored-instance/url inst)
+                                 (stored-instance/id inst)
+                                 (stored-instance/secret inst)
+                                 user password)))
+      (setf (mastodon-frame/credentials clim:*application-frame*) cred)
+      (with-accessors ((cred-list stored-instance/saved-creds))
+          inst
+        (setf cred-list (cons (make-instance 'stored-cred :name user :cred cred)
+                              (remove user cred-list :key #'stored-cred/name :test #'equal))))
+      (save-instances (mastodon-frame/instances frame)))))
+
+(define-mastodon-frame-command (select-user :name "Select User")
+    ((cred 'stored-cred))
+  (let ((frame clim:*application-frame*))
+    (setf (mastodon-frame/credentials frame) (stored-cred/cred cred))))
 
 (define-mastodon-frame-command (load-status :name "Load Status")
     ((message 'generic-status))
@@ -580,6 +613,11 @@
     (remove-cached-instance-button remove-instance mastodon-frame)
     (obj)
   (list (remove-cached-instance-button/instance obj)))
+
+(clim:define-presentation-to-command-translator choose-login
+    (choose-login-button select-user mastodon-frame)
+    (obj)
+  (list (choose-login-button/cred obj)))
 
 (clim:define-presentation-to-command-translator select-generic-activity
     (generic-activity load-status mastodon-frame)
