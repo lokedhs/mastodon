@@ -31,11 +31,13 @@
     (mastodon:status/id status)))
 
 ;;; Redisplay on resize
-(defmethod clim:handle-event :after ((sheet clim:mirrored-sheet-mixin)
-	                             (event clim:window-configuration-event))
-  (let ((frame clim:*application-frame*))
-    (clim:redisplay-frame-pane clim:*application-frame* (clim:find-pane-named frame 'activity-list) :force-p t)
-    (clim:redisplay-frame-pane clim:*application-frame* (clim:find-pane-named frame 'user-info) :force-p t)))
+#+nil
+(progn
+  (defmethod clim:handle-event :after ((sheet clim:mirrored-sheet-mixin)
+	                               (event clim:window-configuration-event))
+    (let ((frame clim:*application-frame*))
+      (clim:redisplay-frame-pane clim:*application-frame* (clim:find-pane-named frame 'activity-list) :force-p t)
+      (clim:redisplay-frame-pane clim:*application-frame* (clim:find-pane-named frame 'user-info) :force-p t))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; generic-user
@@ -639,7 +641,7 @@
   (unless lparallel:*kernel*
     (setf lparallel:*kernel* (lparallel:make-kernel 10)))
   (let ((frame (clim:make-application-frame 'mastodon-frame
-                                            :credentials (or (load-creds) mastodon:*credentials*)
+                                            :credentials mastodon:*credentials*
                                             :width 1000 :height 700
                                             :left 10 :top 10)))
     (setq *frame* frame)
