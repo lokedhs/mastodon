@@ -15,9 +15,6 @@
 (defun nil-if-empty (s)
   (if (equal s "") nil s))
 
-(defmacro with-call-in-event-handler (frame &body body)
-  `(call-in-event-handler ,frame (lambda () ,@body)))
-
 (defun parse-timestamp (s)
   (local-time:parse-timestring s))
 
@@ -36,3 +33,22 @@
              (format nil "~a hour~@[s~] ago" n (/= n 1))))
           (t
            (local-time:format-timestring nil ts :format '((:year 4) #\Space :short-month #\Space (:day 1)))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Updating application pane
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defclass update-application-pane (clim:application-pane)
+  ())
+
+(defvar *in-redraw* nil)
+
+(defmethod clim:note-sheet-region-changed :after ((sheet update-application-pane))
+  (unless *in-redraw*
+    (let ((*in-redraw* t))
+      (clim:redisplay-frame-pane (clim:pane-frame sheet) sheet))))
+
+(defun make-update-pane (name &rest args)
+  (apply #'clim:make-clim-stream-pane :type 'update-application-pane
+                                      :name name
+                                      args))
