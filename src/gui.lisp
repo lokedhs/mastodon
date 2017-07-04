@@ -171,24 +171,25 @@
 (defun load-instances ()
   (let ((*read-eval* nil))
     (let ((in (open *instance-list-filename* :if-does-not-exist nil)))
-      (when in
-        (unwind-protect
-             (destructuring-bind (instances cred)
-                 (read in)
-               (progn
-                 (unless (listp instances)
-                   (error "Unexpected format of instance list"))
-                 (list (mapcar (lambda (v)
-                                 (destructuring-bind (name url id secret saved-creds)
-                                     v
-                                   (make-instance 'stored-instance
-                                                  :name name :url url :id id :secret secret
-                                                  :saved-creds (mapcar (lambda (v) (parse-saved-cred url v)) saved-creds))))
-                               instances)
-                       (if cred
-                           (make-instance 'mastodon:credentials :url (first cred) :token (second cred))
-                           nil))))
-          (close in))))))
+      (if in
+          (unwind-protect
+               (destructuring-bind (instances cred)
+                   (read in)
+                 (progn
+                   (unless (listp instances)
+                     (error "Unexpected format of instance list"))
+                   (list (mapcar (lambda (v)
+                                   (destructuring-bind (name url id secret saved-creds)
+                                       v
+                                     (make-instance 'stored-instance
+                                                    :name name :url url :id id :secret secret
+                                                    :saved-creds (mapcar (lambda (v) (parse-saved-cred url v)) saved-creds))))
+                                 instances)
+                         (if cred
+                             (make-instance 'mastodon:credentials :url (first cred) :token (second cred))
+                             nil))))
+            (close in))
+          (list nil nil)))))
 
 (defun save-instances (instances cred)
   (with-open-file (out *instance-list-filename* :direction :output :if-exists :supersede)
