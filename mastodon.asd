@@ -15,6 +15,7 @@
                :uiop
                :lparallel
                :local-time
+               :cl-unicode
                :status-net)
   :components ((:module "src"
                 :serial t
