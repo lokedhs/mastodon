@@ -417,3 +417,19 @@
   (present-to-stream (make-instance 'user-link :account (displayed-reblog/user obj)) stream)
   (format stream " boosted your status~%~%")
   (present-status stream (displayed-reblog/status obj)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; content parser
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun user-link->name (url)
+  (puri:uri))
+
+(defun find-mentions-in-content (text)
+  (let ((doc (closure-html:parse s (cxml-dom:make-dom-builder))))
+    (status-net:with-html-namespaces
+      (let ((nodes (xpath:evaluate "//h:a/@href" doc))
+            (refs (xpath:map-node-set->list (lambda (node)
+                                              (user-link->name (dom:node-value node)))
+                                            nodes)))
+        (remove-duplicates (remove nil refs) :test #'equal)))))

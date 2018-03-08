@@ -25,18 +25,19 @@
                                                               stream (view t)
 							      default default-supplied-p present-p query-identifier)
   (let* ((editor nil)
+         (text (if default-supplied-p default ""))
 	 (record (clim:updating-output (stream :unique-id query-identifier
-                                               :cache-value (if default-supplied-p default "")
+                                               :cache-value text
 		                               :record-type 'post-text-record)
                    (clim:surrounding-output-with-border (stream :ink *editor-pane-border* :padding 2)
 	            (clim:with-output-as-gadget (stream)
-	              (setq editor (clim:make-pane 'clim:text-editor :ncolumns 40 :nlines 8)))))))
+	              (setq editor (clim:make-pane 'clim:text-editor :ncolumns 40 :nlines 8 :value text)))))))
     (when editor 
       (setf (post-text-record/editor record) editor))
     record))
 
-(defun accepting-post (&key (stream *query-io*) (own-window nil))
+(defun accepting-post (&key text (stream *query-io*) (own-window nil))
   (let (content)
     (clim:accepting-values (stream :resynchronize-every-pass t :own-window own-window)
-      (setq content (clim:accept 'post-content :prompt "Post Content" :stream stream)))
+      (setq content (clim:accept 'post-content :prompt "Post Content" :stream stream :default text)))
     content))

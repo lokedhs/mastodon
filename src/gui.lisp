@@ -509,7 +509,7 @@
 
 (define-mastodon-frame-command (reply :name "Reply")
     ((in-reply-to 'generic-status))
-  (let ((text (accepting-post)))
+  (let ((text (accepting-post :text (find-mentions-in-content (generic-status/content in-reply-to)))))
     (etypecase in-reply-to
       (displayed-status (mastodon:post text
                                        :reply-id (mastodon:status/id (displayed-status/status in-reply-to))
