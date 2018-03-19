@@ -198,6 +198,11 @@
                               cred
                               :method :post))
 
+(defun load-status (id &key (cred *credentials*))
+  (let ((result (authenticated-http-request (format nil "api/v1/statuses/~a" id)
+                                            cred)))
+    (parse-json-object 'status result)))
+
 (defun timeline (category &key local (cred *credentials*))
   (unless (member category '("home" "public") :test #'equal)
     (error "Invalid timeline category"))

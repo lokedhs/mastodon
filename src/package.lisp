@@ -45,7 +45,8 @@
    #:notification/type
    #:notification/created-at
    #:notification/account
-   #:notification/status))
+   #:notification/status
+   #:load-status))
 
 (defpackage :mastodon-gui
   (:use :cl)
